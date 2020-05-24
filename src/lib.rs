@@ -4,10 +4,12 @@
 extern crate core;
 
 extern crate endian_type;
+extern crate num_traits;
 
 use core::mem::size_of;
-use core::convert::From;
+
 use endian_type::types::*;
+use num_traits::cast::ToPrimitive;
 
 #[repr(C, packed)]
 struct fdt_header {
@@ -37,7 +39,7 @@ pub struct FdtReserveEntryItr<'a> {
 impl<'a> FdtReserveEntryItr<'a> {
     pub(self) fn new(fdt: &'a FdtBlob) -> Self {
         Self {
-            curr_addr: u32::from(fdt.header().off_dt_struct) as usize + fdt.base(),
+            curr_addr: fdt.header().off_dt_struct.to_usize().unwrap() + fdt.base(),
             fdt: fdt,
         }
     }
@@ -89,7 +91,7 @@ impl FdtBlob {
     }
 
     pub fn totalsize(&self) -> usize {
-        return u32::from(self.header().totalsize) as usize;
+        return self.header().totalsize.to_usize().unwrap();
     }
 
     pub fn itr_reserved_entries(&self) -> FdtReserveEntryItr {
