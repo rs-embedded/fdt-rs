@@ -1,4 +1,7 @@
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(feature = "std")]
+extern crate core;
 
 extern crate endian_type;
 
@@ -22,8 +25,8 @@ struct fdt_header {
 
 #[repr(C, packed)]
 pub struct fdt_reserve_entry {
-    address: u64_be,
-    size: u64_be,
+    pub address: u64_be,
+    pub size: u64_be,
 }
 
 pub struct FdtReserveEntryItr<'a> {
@@ -34,7 +37,7 @@ pub struct FdtReserveEntryItr<'a> {
 impl<'a> FdtReserveEntryItr<'a> {
     pub(self) fn new(fdt: &'a FdtBlob) -> Self {
         Self {
-            curr_addr: u32::from(fdt.header().off_dt_struct) as usize,
+            curr_addr: u32::from(fdt.header().off_dt_struct) as usize + fdt.base(),
             fdt: fdt,
         }
     }
@@ -102,6 +105,21 @@ impl FdtBlob {
 mod tests {
     #[test]
     fn it_works() {
-        assert_eq!(2 + 2, 4);
+        use std::fs::File;
+        use std::io::Read;
+        use std::env::current_exe;
+        use std::path::Path;
+
+        let mut file = File::open("test/riscv64-virt.dtb").unwrap();
+        let mut vec: Vec::<u8> =  Vec::new();
+        let _ = file.read_to_end(&mut vec).unwrap();
+
+        unsafe {
+            let blob = crate::FdtBlob::new(vec.as_ptr() as usize).unwrap();
+            assert!(blob.itr_reserved_entries().count() == 0);
+        }
+
+        // Wait until the end to drop in since we alias the address.
+        std::mem::drop(vec);
     }
 }

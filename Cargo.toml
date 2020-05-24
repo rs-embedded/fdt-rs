@@ -10,3 +10,7 @@ edition = "2018"
 git = "https://github.com/spwilson2/endian-type"
 branch = "dev"
 default-features = false
+
+[features]
+default = ["std"]
+std = []
