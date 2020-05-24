@@ -5,11 +5,12 @@ extern crate core;
 
 extern crate endian_type;
 
-use core::mem::size_of;
 use core::convert::From;
+use core::iter::DoubleEndedIterator;
+use core::mem::size_of;
 use endian_type::types::*;
 
-#[repr(C, packed)]
+#[repr(C)]
 struct fdt_header {
     magic: u32_be,
     totalsize: u32_be,
@@ -23,7 +24,7 @@ struct fdt_header {
     size_dt_struct: u32_be,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct fdt_reserve_entry {
     pub address: u64_be,
     pub size: u64_be,
@@ -37,31 +38,51 @@ pub struct FdtReserveEntryItr<'a> {
 impl<'a> FdtReserveEntryItr<'a> {
     pub(self) fn new(fdt: &'a FdtBlob) -> Self {
         Self {
-            curr_addr: u32::from(fdt.header().off_dt_struct) as usize + fdt.base(),
+            curr_addr: Self::entry_base(fdt),
             fdt: fdt,
         }
     }
+
+    fn entry_base(fdt: &FdtBlob) -> usize {
+        u32::from(fdt.header().off_dt_struct) as usize + fdt.base()
+    }
+
+    fn self_entry_base(&self) -> usize {
+        Self::entry_base(self.fdt)
+    }
 }
 
-impl<'a> Iterator for FdtReserveEntryItr<'a> {
-    type Item = &'a fdt_reserve_entry;
-    fn next(&mut self) -> Option<Self::Item> {
+impl<'a> DoubleEndedIterator for FdtReserveEntryItr<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
         unsafe {
             let ptr = &*(self.curr_addr as *const fdt_reserve_entry);
-            if self.fdt.totalsize() > (self.curr_addr - self.fdt.base()) {
+            if self.curr_addr < self.self_entry_base() {
                 return None;
-            } 
-            else if ptr.size == 0.into() && ptr.address == 0.into() {
-                return None;
-            }
-            else {
-                self.curr_addr += size_of::<fdt_reserve_entry>();
+            } else {
+                self.curr_addr -= size_of::<fdt_reserve_entry>();
                 return Some(ptr);
             }
         }
     }
 }
 
+impl<'a> Iterator for FdtReserveEntryItr<'a> {
+    type Item = &'a fdt_reserve_entry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            let ptr = &*(self.curr_addr as *const fdt_reserve_entry);
+            if self.fdt.totalsize() > (self.curr_addr - self.fdt.base()) {
+                return None;
+            } else if ptr.size == 0.into() && ptr.address == 0.into() {
+                return None;
+            } else {
+                self.curr_addr += size_of::<fdt_reserve_entry>();
+                return Some(ptr);
+            }
+        }
+    }
+}
 
 pub struct FdtBlob {
     base: *const fdt_header,
@@ -92,8 +113,9 @@ impl FdtBlob {
         return u32::from(self.header().totalsize) as usize;
     }
 
-    pub fn itr_reserved_entries(&self) -> FdtReserveEntryItr {
-        return FdtReserveEntryItr::new(self)
+    /// An iterator over the Device Tree "5.3 Memory Reservation Blocks"
+    pub fn reserved_entries(&self) -> FdtReserveEntryItr {
+        return FdtReserveEntryItr::new(self);
     }
 }
 
@@ -105,18 +127,18 @@ impl FdtBlob {
 mod tests {
     #[test]
     fn it_works() {
+        use std::env::current_exe;
         use std::fs::File;
         use std::io::Read;
-        use std::env::current_exe;
         use std::path::Path;
 
         let mut file = File::open("test/riscv64-virt.dtb").unwrap();
-        let mut vec: Vec::<u8> =  Vec::new();
+        let mut vec: Vec<u8> = Vec::new();
         let _ = file.read_to_end(&mut vec).unwrap();
 
         unsafe {
             let blob = crate::FdtBlob::new(vec.as_ptr() as usize).unwrap();
-            assert!(blob.itr_reserved_entries().count() == 0);
+            assert!(blob.reserved_entries().count() == 0);
         }
 
         // Wait until the end to drop in since we alias the address.
