@@ -2,7 +2,7 @@
 name = "fdt-rs"
 version = "0.1.0"
 authors = ["Sean Wilson <sean.wilson@ghs.com>", "Marc Brinkmann <git@marcbrinkmann.de>"]
-license = ["MIT"]
+license = "MIT"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -19,17 +19,9 @@ default-features = false
 [dependencies.num-traits]
 version = "0.2"
 default-features = false
-[dependencies.num]
-version = "0.2"
-default-features = false
-[dependencies.ascii]
-version = "1.0"
-default-features = false
-
 [dependencies.memoffset]
 version = "0.5.4"
 default-features = false
-
 
 #[dependencies.ascii]
 #version = "1.0.0"
