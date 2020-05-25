@@ -1,10 +1,17 @@
+#![deny(
+     clippy::all,
+     //clippy::cargo,
+ )]
+#![allow(clippy::as_conversions)]
+#![allow(clippy::print_stdout)]
+#![allow(clippy::implicit_return)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
 extern crate core;
 
-extern crate endian_type;
 extern crate ascii;
+extern crate endian_type;
 
 extern crate num;
 #[macro_use]
@@ -13,7 +20,7 @@ extern crate num_derive;
 use core::convert::From;
 use core::iter::DoubleEndedIterator;
 use core::mem::size_of;
-use endian_type::types::*;
+use endian_type::types::{u32_be, u64_be};
 
 use num::FromPrimitive;
 
@@ -22,7 +29,7 @@ enum FdtTok {
     BeginNode = 0x1,
     EndNode = 0x2,
     Prop = 0x3,
-    Nop =0x4,
+    Nop = 0x4,
     End = 0x9,
 }
 
@@ -68,12 +75,12 @@ impl<'a> FdtReserveEntryIter<'a> {
     pub(self) fn new(fdt: &'a FdtBlob) -> Self {
         Self {
             curr_addr: Self::fdt_entry_base(fdt),
-            fdt: fdt,
+            fdt,
         }
     }
 
     fn fdt_entry_base(fdt: &FdtBlob) -> usize {
-        u32::from(fdt.header().off_mem_rsvmap) as usize + fdt.base()
+        (u32::from(fdt.header().off_mem_rsvmap) as usize) + fdt.base()
     }
 
     fn entry_base(&self) -> usize {
@@ -86,10 +93,10 @@ impl<'a> DoubleEndedIterator for FdtReserveEntryIter<'a> {
         unsafe {
             let ptr = &*(self.curr_addr as *const fdt_reserve_entry);
             if self.curr_addr < self.entry_base() {
-                return None;
+                None
             } else {
                 self.curr_addr -= size_of::<fdt_reserve_entry>();
-                return Some(ptr);
+                Some(ptr)
             }
         }
     }
@@ -101,13 +108,13 @@ impl<'a> Iterator for FdtReserveEntryIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let ptr = &*(self.curr_addr as *const fdt_reserve_entry);
-            if self.fdt.totalsize() > (self.curr_addr - self.fdt.base()) {
-                return None;
-            } else if ptr.size == 0.into() && ptr.address == 0.into() {
-                return None;
+            if self.fdt.totalsize() > (self.curr_addr - self.fdt.base())
+                || ptr.size == 0.into() && ptr.address == 0.into()
+            {
+                None
             } else {
                 self.curr_addr += size_of::<fdt_reserve_entry>();
-                return Some(ptr);
+                Some(ptr)
             }
         }
     }
@@ -121,6 +128,7 @@ pub struct FdtNodeIter<'a> {
 
 pub struct FdtNode<'a> {
     pub name: &'a str,
+    #[allow(dead_code)]
     fdt: &'a FdtBlob,
 }
 
@@ -128,7 +136,7 @@ impl<'a> FdtNodeIter<'a> {
     pub(self) fn new(fdt: &'a FdtBlob) -> Self {
         Self {
             curr_addr: Self::entry_base(fdt),
-            fdt: fdt,
+            fdt,
         }
     }
 
@@ -169,12 +177,12 @@ impl<'a> Iterator for FdtNodeIter<'a> {
                         let mut broke: bool = false;
                         for c_addr in self.curr_addr..self.fdt.end() {
                             if *(c_addr as *const u8) == 0 {
-                                 // Include the null byte.
+                                // Include the null byte.
                                 c_str_end = c_addr + 1;
                                 broke = true;
                                 break;
                             }
-                        };
+                        }
                         if !broke {
                             panic!("Unable to find the end of the FdtNode name.")
                         }
@@ -182,47 +190,48 @@ impl<'a> Iterator for FdtNodeIter<'a> {
                         // Move to next u32 alignment after the str.
                         let c_str_size = c_str_end - c_str_start;
                         self.curr_addr += c_str_size;
-                        self.curr_addr += (self.curr_addr as *const u8).align_offset(size_of::<u32_be>());
+                        self.curr_addr +=
+                            (self.curr_addr as *const u8).align_offset(size_of::<u32_be>());
 
-
-                        let str_slice = core::slice::from_raw_parts(c_str_start as *const u8, c_str_size);
-                        return Some( FdtNode {
-                            name: core::str::from_utf8(str_slice).unwrap(), 
-                            fdt: self.fdt
+                        let str_slice =
+                            core::slice::from_raw_parts(c_str_start as *const u8, c_str_size);
+                        return Some(FdtNode {
+                            name: core::str::from_utf8(str_slice).unwrap(),
+                            fdt: self.fdt,
                         });
-                    },
+                    }
                     Some(FdtTok::EndNode) => {
                         // Advance the node by sizeof tok
                         self.curr_addr += size_of::<u32_be>();
                         continue;
-                    },
+                    }
                     Some(FdtTok::Prop) => {
                         // Advance the node by sizeof tok + sizeof prop
                         self.curr_addr += size_of::<u32_be>();
-                        let tmp = u32::from((*(self.curr_addr as *const fdt_prop_header)).len) as usize;
+                        let tmp =
+                            u32::from((*(self.curr_addr as *const fdt_prop_header)).len) as usize;
                         self.curr_addr += tmp;
                         self.curr_addr += size_of::<fdt_prop_header>();
-                        self.curr_addr += (self.curr_addr as *const u8).align_offset(size_of::<u32_be>());
+                        self.curr_addr +=
+                            (self.curr_addr as *const u8).align_offset(size_of::<u32_be>());
                         continue;
-                    },
+                    }
                     Some(FdtTok::Nop) => {
                         // Advance the node by sizeof tok
                         self.curr_addr += size_of::<u32_be>();
                         continue;
-                    },
+                    }
                     Some(FdtTok::End) => {
                         return None;
-                    },
+                    }
                     None => {
                         panic!("Unknown FDT Token Value {:}", u32::from(ptr));
-                    },
+                    }
                 };
-            };
-
+            }
         }
     }
 }
-
 
 #[derive(Copy, Clone, Debug)]
 pub struct FdtBlob {
@@ -230,14 +239,17 @@ pub struct FdtBlob {
 }
 
 impl FdtBlob {
-    pub unsafe fn new(base: usize) -> Result<FdtBlob, ()> {
+
+    /// # Safety
+    /// TODO
+    pub unsafe fn new(base: usize) -> Result<Self, ()> {
         let header = base as *const fdt_header;
 
-        if (*header).magic != 0xd00dfeed.into() {
+        if (*header).magic != 0xd00d_feed.into() {
             return Err(());
         }
 
-        Ok(FdtBlob {
+        Ok(Self {
             base: base as *const fdt_header,
         })
     }
@@ -246,10 +258,14 @@ impl FdtBlob {
         unsafe { &*self.base as &fdt_header }
     }
 
+    #[inline]
+    #[must_use]
     pub fn base(&self) -> usize {
         self.base as usize
     }
 
+    #[inline]
+    #[must_use]
     pub fn totalsize(&self) -> usize {
         u32::from(self.header().totalsize) as usize
     }
@@ -260,11 +276,15 @@ impl FdtBlob {
     }
 
     /// An iterator over the Device Tree "5.3 Memory Reservation Blocks"
+    #[inline]
+    #[must_use]
     pub fn reserved_entries(&self) -> FdtReserveEntryIter {
         FdtReserveEntryIter::new(self)
     }
 
     /// An iterator over the Device Tree "5.3 Memory Reservation Blocks"
+    #[inline]
+    #[must_use]
     pub fn nodes(&self) -> FdtNodeIter {
         FdtNodeIter::new(self)
     }
