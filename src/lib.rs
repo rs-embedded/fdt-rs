@@ -18,7 +18,7 @@ use core::str;
 use util::{SliceRead, SliceReadError};
 
 use core::convert::From;
-use core::mem::{size_of, transmute};
+use core::mem::size_of;
 
 use num_traits::FromPrimitive;
 
@@ -113,6 +113,10 @@ impl<'a> DevTree<'a> {
         get_be32_field!(off_dt_strings, fdt_header, self.buf).unwrap() as usize
     }
 
+    unsafe fn ptr_at<T>(&self, offset: usize) -> *const T {
+        self.buf.as_ptr().add(offset) as *const T
+    }
+
     /// An iterator over the Dev Tree "5.3 Memory Reservation Blocks"
     #[inline]
     #[must_use]
@@ -158,17 +162,55 @@ impl<'a> DevTreeProp<'a> {
     pub fn name(&self) -> Result<&'a str, DevTreeError> {
         self.iter.get_prop_str(self.nameoff)
     }
+
+    pub fn length(&self) -> usize {
+        self.length
+    }
+
+    pub fn get_u32(&self) -> Result<u32, DevTreeError> {
+        if self.length != size_of::<u32>() {
+            return Err(DevTreeError::InvalidLength);
+        }
+        unsafe {
+           return Ok(*self.iter.fdt.ptr_at(self.propoff))
+        }
+    }
+
+    pub fn get_u64(&self) -> Result<u64, DevTreeError> {
+        todo!();
+    }
+
+    pub fn get_phandle(&self) -> Result<u32, DevTreeError> {
+        todo!();
+    }
+
+    pub fn get_str(&self) -> Result<&'a str, DevTreeError> {
+        todo!();
+    }
+
+    pub fn get_str_count(&self) -> Result<usize, DevTreeError> {
+        todo!();
+    }
+
+    pub fn get_strlist(&self, list: &mut[&'a str]) -> Result<usize, DevTreeError> {
+        todo!();
+    }
+
+    pub unsafe fn get_raw_buf(&self) -> &'a [u8] {
+        todo!();
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use core::mem::size_of;
+    use std::env::current_exe;
+    use std::fs::File;
+    use std::io::Read;
+    use std::path::Path;
 
     #[test]
     fn reserved_entries_iter() {
-        use std::env::current_exe;
-        use std::fs::File;
-        use std::io::Read;
-        use std::path::Path;
 
         let mut file = File::open("test/riscv64-virt.dtb").unwrap();
         let mut vec: Vec<u8> = Vec::new();
@@ -185,11 +227,6 @@ mod tests {
 
     #[test]
     fn nodes_iter() {
-        use std::env::current_exe;
-        use std::fs::File;
-        use std::io::Read;
-        use std::path::Path;
-
         let mut file = File::open("test/riscv64-virt.dtb").unwrap();
         let mut vec: Vec<u8> = Vec::new();
         let _ = file.read_to_end(&mut vec).unwrap();
@@ -208,11 +245,6 @@ mod tests {
 
     #[test]
     fn node_prop_iter() {
-        use std::env::current_exe;
-        use std::fs::File;
-        use std::io::Read;
-        use std::path::Path;
-
         let mut file = File::open("test/riscv64-virt.dtb").unwrap();
         let mut vec: Vec<u8> = Vec::new();
         let _ = file.read_to_end(&mut vec).unwrap();
@@ -223,6 +255,9 @@ mod tests {
                 println!("{}", node.name.unwrap());
                 for prop in node.props() {
                     println!("\t{}", prop.name().unwrap());
+                    if prop.length() == size_of::<u32>() {
+                    println!("\t\t0x{:x}", prop.get_u32().unwrap());
+                    }
                 }
             }
         }

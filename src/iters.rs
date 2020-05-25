@@ -19,7 +19,7 @@ impl<'a> DevTreeReserveEntryIter<'a> {
             if self.offset + size_of::<fdt_reserve_entry>() > self.fdt.buf.len() {
                 Err(DevTreeError::InvalidLength)
             } else {
-                Ok(transmute(self.fdt.buf.as_ptr().add(self.offset)))
+                Ok(&*self.fdt.ptr_at(self.offset))
             }
         }
     }
@@ -74,7 +74,7 @@ impl<'a> ParsedItem<'a> {
 #[derive(Clone, Copy, Debug)]
 pub struct DevTreeParseIter<'a> {
     dt_offset: usize,
-    fdt: &'a DevTree<'a>,
+    pub(crate) fdt: &'a DevTree<'a>,
 }
 
 impl<'a> DevTreeParseIter<'a> {
@@ -198,9 +198,7 @@ fn step_parse_device_tree<'a>(
                     if offset + size_of::<fdt_reserve_entry>() > fdt.buf.len() {
                         panic!("");
                     }
-                    let header = transmute::<*const u8, *const fdt_prop_header>(
-                        fdt.buf.as_ptr().add(offset),
-                    );
+                    let header: *const fdt_prop_header = fdt.ptr_at(offset);
                     let prop_len = u32::from((*header).len);
 
                     offset += (prop_len as usize) + size_of::<fdt_prop_header>();
