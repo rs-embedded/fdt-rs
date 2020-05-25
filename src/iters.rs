@@ -158,9 +158,7 @@ impl<'a> Iterator for DevTreeNodePropIter<'a> {
                     length: p.length as usize,
                     propoff: p.propoff,
                 }),
-                Some(_) => {
-                    continue;
-                }
+                // Return if a new node or an EOF.
                 _ => return None,
             }
         }
