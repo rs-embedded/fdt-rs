@@ -65,7 +65,6 @@ impl From<SliceReadError> for DevTreeError {
     }
 }
 
-
 #[derive(Copy, Clone, Debug)]
 pub struct DevTree<'a> {
     buf: &'a [u8],
@@ -133,22 +132,30 @@ impl<'a> DevTree<'a> {
 }
 
 pub struct DevTreeNode<'a> {
-    pub name: &'a str,
-    prop_offset: usize,
-    #[allow(dead_code)]
-    fdt: &'a DevTree<'a>,
+    pub name: Result<&'a str, Utf8Error>,
+    inner_iter: iters::DevTreeParseIter<'a>,
 }
 
 impl<'a> DevTreeNode<'a> {
+    fn new(name: Result<&'a str, Utf8Error>, inner_iter: iters::DevTreeParseIter<'a>) -> Self {
+        Self { name, inner_iter }
+    }
     pub fn props(&'a self) -> iters::DevTreeNodePropIter<'a> {
         iters::DevTreeNodePropIter::new(self)
     }
 }
 
 pub struct DevTreeProp<'a> {
-    pub name: &'a str,
-    pub length: usize,
-    pub node: &'a DevTreeNode<'a>,
+    iter: iters::DevTreeParseIter<'a>,
+    propoff: usize,
+    length: usize,
+    nameoff: usize,
+}
+
+impl<'a> DevTreeProp<'a> {
+    pub fn name(&self) -> Result<&'a str, Utf8Error> {
+        Ok("TODO!")
+    }
 }
 
 #[cfg(test)]
@@ -188,7 +195,7 @@ mod tests {
         unsafe {
             let blob = crate::DevTree::new(vec.as_slice()).unwrap();
             for node in blob.nodes() {
-                println!("{}", node.name);
+                println!("{}", node.name.unwrap());
             }
             assert!(blob.nodes().count() == 27);
         }
@@ -211,9 +218,9 @@ mod tests {
         unsafe {
             let blob = crate::DevTree::new(vec.as_slice()).unwrap();
             for node in blob.nodes() {
-                println!("{}", node.name);
+                println!("{}", node.name.unwrap());
                 for prop in node.props() {
-                    println!("\t{}", prop.name);
+                    println!("\t{}", prop.name().unwrap());
                 }
             }
         }

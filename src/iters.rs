@@ -43,55 +43,100 @@ impl<'a> Iterator for DevTreeReserveEntryIter<'a> {
     }
 }
 
+pub struct ParsedNode<'a> {
+    /// Offset of the property value within the FDT buffer.
+    new_offset: usize,
+    name: Result<&'a str, Utf8Error>,
+}
+pub struct ParsedProp {
+    new_offset: usize,
+    /// Offset of the property value within the FDT buffer.
+    propoff: usize,
+    length: u32,
+    nameoff: u32,
+}
+
+pub enum ParsedItem<'a> {
+    Node(ParsedNode<'a>),
+    Prop(ParsedProp),
+}
+
+// Static trait
+impl<'a> ParsedItem<'a> {
+    fn new_offset(&self) -> usize {
+        use ParsedItem::*;
+        match self {
+            Prop(i) => i.new_offset,
+            Node(i) => i.new_offset,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DevTreeParseIter<'a> {
+    dt_offset: usize,
+    fdt: &'a DevTree<'a>,
+}
+
+impl<'a> DevTreeParseIter<'a> {
+    pub(crate) fn new(fdt: &'a DevTree) -> Self {
+        Self {
+            dt_offset: fdt.off_dt_struct(),
+            fdt,
+        }
+    }
+}
+
+impl<'a> Iterator for DevTreeParseIter<'a> {
+    type Item = ParsedItem<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let res = step_parse_device_tree(self.dt_offset, self.fdt);
+        if res.is_ok() {
+            let un = res.unwrap();
+            self.dt_offset = un.new_offset();
+            return Some(un);
+        }
+        None
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct DevTreeNodeIter<'a> {
-    offset: usize,
-    fdt: &'a DevTree<'a>,
+    iter: DevTreeParseIter<'a>,
 }
 
 impl<'a> DevTreeNodeIter<'a> {
     pub(crate) fn new(fdt: &'a DevTree) -> Self {
         Self {
-            offset: fdt.off_dt_struct(),
-            fdt,
+            iter: DevTreeParseIter::new(fdt),
         }
     }
 }
 
 impl<'a> Iterator for DevTreeNodeIter<'a> {
     type Item = DevTreeNode<'a>;
-
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match step_parse_device_tree(self.offset, self.fdt) {
-                Ok(ParsedItem::Prop(p)) => {
-                    self.offset = p.new_offset;
+            match self.iter.next() {
+                Some(ParsedItem::Node(n)) => return Some(DevTreeNode::new(n.name, self.iter)),
+                Some(_) => {
+                    continue;
                 }
-                Ok(ParsedItem::Node(n)) => {
-                    self.offset = n.new_offset;
-                    return Some(Self::Item {
-                        fdt: self.fdt,
-                        name: n.name.unwrap(),
-                        prop_offset: n.new_offset,
-                    })
-                }
-                Err(DevTreeError::Eof) => return None,
-                Err(e) => panic!("Unexpected condition: {:?}", e),
+                _ => return None,
             }
         }
     }
 }
 
 pub struct DevTreeNodePropIter<'a> {
-    offset: usize,
-    pub node: &'a DevTreeNode<'a>,
+    pub parse_iter: DevTreeParseIter<'a>,
 }
 
 impl<'a> DevTreeNodePropIter<'a> {
     pub(crate) fn new(node: &'a DevTreeNode) -> Self {
         Self {
-            offset: node.prop_offset, // FIXME Nee proprty offset from this
-            node: node,
+            parse_iter: node.inner_iter,
         }
     }
 }
@@ -99,43 +144,24 @@ impl<'a> DevTreeNodePropIter<'a> {
 impl<'a> Iterator for DevTreeNodePropIter<'a> {
     type Item = DevTreeProp<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        match step_parse_device_tree(self.offset, self.node.fdt) {
-            Ok(ParsedItem::Prop(p)) => {
-                self.offset = p.new_offset;
-
-                Some(DevTreeProp {
-                name: "todo - look up in string table",
-                length: u32::from(p.header.len) as usize,
-                node: self.node,
-            })},
-            Ok(ParsedItem::Node(_)) => {
-                // If we hit a new node, we're done.
-                None
+        loop {
+            let this = self.parse_iter;
+            match self.parse_iter.next() {
+                Some(ParsedItem::Prop(p)) => return Some(Self::Item {
+                    iter: this,
+                    nameoff: p.nameoff as usize,
+                    length: p.length as usize,
+                    propoff: p.propoff,
+                }),
+                Some(_) => {
+                    continue;
+                }
+                _ => return None,
             }
-            Err(DevTreeError::Eof) => None,
-            Err(e) => panic!("Unexpected condition: {:?}", e),
         }
     }
 }
 
-struct ParsedNode<'a> {
-    /// Offset of the property value within the FDT buffer.
-    new_offset: usize,
-    name: Result<&'a str, Utf8Error>,
-}
-struct ParsedProp<'a> {
-    new_offset: usize,
-    /// Offset of the property value within the FDT buffer.
-    value_offset: usize,
-    header: &'a fdt_prop_header,
-}
-
-enum ParsedItem<'a> {
-    Node(ParsedNode<'a>),
-    Prop(ParsedProp<'a>),
-}
-
-// TODO Move into a DevTreeIter
 fn step_parse_device_tree<'a>(
     mut offset: usize,
     fdt: &'a DevTree,
@@ -175,18 +201,15 @@ fn step_parse_device_tree<'a>(
                     let prop_len = u32::from((*header).len);
 
                     offset += (prop_len as usize) + size_of::<fdt_prop_header>();
-                    let value_offset = offset;
+                    let propoff = offset;
 
                     // Align back to u32.
-                    offset += fdt
-                        .buf
-                        .as_ptr()
-                        .add(offset)
-                        .align_offset(size_of::<u32>());
+                    offset += fdt.buf.as_ptr().add(offset).align_offset(size_of::<u32>());
                     return Ok(ParsedItem::Prop(ParsedProp {
-                        header: &*header,
                         new_offset: offset,
-                        value_offset,
+                        propoff,
+                        length: prop_len,
+                        nameoff: u32::from((*header).nameoff)
                     }));
                 }
                 Some(FdtTok::EndNode) => {}
@@ -201,4 +224,3 @@ fn step_parse_device_tree<'a>(
         }
     }
 }
-
