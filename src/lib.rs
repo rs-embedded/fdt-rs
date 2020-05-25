@@ -9,20 +9,50 @@
 
 #[cfg(feature = "std")]
 extern crate core;
-
-extern crate ascii;
 extern crate endian_type;
-
-extern crate num;
 #[macro_use]
-extern crate num_derive;
+extern crate memoffset;
+
+pub mod util;
+use core::str;
+use util::{SliceRead, SliceReadError};
 
 use core::convert::From;
-use core::iter::DoubleEndedIterator;
-use core::mem::size_of;
-use endian_type::types::{u32_be, u64_be};
+use core::mem::{size_of, transmute};
 
-use num::FromPrimitive;
+use endian_type::types::{u32_be, u64_be};
+use num_derive::FromPrimitive;    
+use num_traits::FromPrimitive;
+
+const FDT_MAGIC: u32 = 0xd00d_feed;
+
+/// An error describe parsing problems when creating device trees.
+#[derive(Debug)]
+pub enum DeviceTreeError {
+    /// The magic number FDT_MAGIC was not found at the start of the
+    /// structure.
+    InvalidMagicNumber,
+    /// TODO
+    InvalidLength,
+    /// Failed to read data from slice.
+    SliceReadError(SliceReadError),
+
+    /// The data format was not as expected at the given buffer offset
+    ParseError(usize),
+
+    /// While trying to convert a string that was supposed to be ASCII, invalid
+    /// utf8 sequences were encounted
+    Utf8Error,
+
+    /// The device tree version is not supported by this library.
+    VersionNotSupported,
+}
+
+impl From<SliceReadError> for DeviceTreeError {
+    fn from(e: SliceReadError) -> DeviceTreeError {
+        DeviceTreeError::SliceReadError(e)
+    }
+}
 
 #[derive(FromPrimitive)]
 enum FdtTok {
@@ -33,12 +63,7 @@ enum FdtTok {
     End = 0x9,
 }
 
-//impl FdtTok {
-//    fn as_be(self) -> u32_be {
-//        u32_be::new(self as u32)
-//    }
-//}
-
+// As defined by the spec.
 #[repr(C)]
 struct fdt_header {
     magic: u32_be,
@@ -51,6 +76,12 @@ struct fdt_header {
     boot_cpuid_phys: u32_be,
     size_dt_strings: u32_be,
     size_dt_struct: u32_be,
+}
+
+macro_rules! get_be32 {
+    ( $f:ident, $s:ident , $buf:expr ) => {
+        $buf.read_be_u32(offset_of!($s, $f))
+    };
 }
 
 #[repr(C)]
@@ -67,36 +98,25 @@ pub struct fdt_reserve_entry {
 
 #[derive(Clone, Debug)]
 pub struct FdtReserveEntryIter<'a> {
-    curr_addr: usize,
-    fdt: &'a FdtBlob,
+    offset: usize,
+    fdt: &'a DeviceTree<'a>,
 }
 
 impl<'a> FdtReserveEntryIter<'a> {
-    pub(self) fn new(fdt: &'a FdtBlob) -> Self {
+    pub(self) fn new(fdt: &'a DeviceTree) -> Self {
         Self {
-            curr_addr: Self::fdt_entry_base(fdt),
+            offset: fdt.off_mem_rsvmap(),
             fdt,
         }
     }
 
-    fn fdt_entry_base(fdt: &FdtBlob) -> usize {
-        (u32::from(fdt.header().off_mem_rsvmap) as usize) + fdt.base()
-    }
-
-    fn entry_base(&self) -> usize {
-        Self::fdt_entry_base(self.fdt)
-    }
-}
-
-impl<'a> DoubleEndedIterator for FdtReserveEntryIter<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
+    fn read(&self) -> Result<&'a fdt_reserve_entry, DeviceTreeError> {
         unsafe {
-            let ptr = &*(self.curr_addr as *const fdt_reserve_entry);
-            if self.curr_addr < self.entry_base() {
-                None
+            // TODO alignment not guarunteed.
+            if self.offset + size_of::<fdt_reserve_entry>() > self.fdt.buf.len() {
+                Err(DeviceTreeError::InvalidLength)
             } else {
-                self.curr_addr -= size_of::<fdt_reserve_entry>();
-                Some(ptr)
+                Ok(transmute(self.fdt.buf.as_ptr().add(self.offset)))
             }
         }
     }
@@ -104,175 +124,151 @@ impl<'a> DoubleEndedIterator for FdtReserveEntryIter<'a> {
 
 impl<'a> Iterator for FdtReserveEntryIter<'a> {
     type Item = &'a fdt_reserve_entry;
-
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let ptr = &*(self.curr_addr as *const fdt_reserve_entry);
-            if self.fdt.totalsize() > (self.curr_addr - self.fdt.base())
-                || ptr.size == 0.into() && ptr.address == 0.into()
-            {
-                None
-            } else {
-                self.curr_addr += size_of::<fdt_reserve_entry>();
-                Some(ptr)
+        if self.offset > self.fdt.totalsize() {
+            None
+        } else {
+            let ret = self.read().unwrap();
+            if ret.address == 0.into() && ret.size == 0.into() {
+                return None;
             }
+
+            self.offset += size_of::<fdt_reserve_entry>();
+            Some(ret)
         }
     }
+}
+
+pub struct DeviceTreeNode<'a> {
+    pub name: &'a str,
+    #[allow(dead_code)]
+    fdt: &'a DeviceTree<'a>,
 }
 
 #[derive(Clone, Debug)]
-pub struct FdtNodeIter<'a> {
-    curr_addr: usize,
-    fdt: &'a FdtBlob,
+pub struct DeviceTreeNodeIter<'a> {
+    offset: usize,
+    fdt: &'a DeviceTree<'a>,
 }
 
-pub struct FdtNode<'a> {
-    pub name: &'a str,
-    #[allow(dead_code)]
-    fdt: &'a FdtBlob,
-}
-
-impl<'a> FdtNodeIter<'a> {
-    pub(self) fn new(fdt: &'a FdtBlob) -> Self {
+impl<'a> DeviceTreeNodeIter<'a> {
+    pub(self) fn new(fdt: &'a DeviceTree) -> Self {
         Self {
-            curr_addr: Self::entry_base(fdt),
+            offset: fdt.off_dt_struct(),
             fdt,
         }
     }
-
-    fn entry_base(fdt: &FdtBlob) -> usize {
-        u32::from(fdt.header().off_dt_struct) as usize + fdt.base()
-    }
-
-    //fn self_entry_base(&self) -> usize {
-    //    Self::entry_base(self.fdt)
-    //}
 }
 
-impl<'a> DoubleEndedIterator for FdtNodeIter<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        todo!();
-    }
-}
-
-impl<'a> Iterator for FdtNodeIter<'a> {
-    type Item = FdtNode<'a>;
+impl<'a> Iterator for DeviceTreeNodeIter<'a> {
+    type Item = DeviceTreeNode<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // TODO Unwraps should be moved out.
+        // We should store errors with the iterator.
         unsafe {
             // Assert because we should end before the FDT_END occurs
             //
             // Since the intent of this library is to execute in a safety context, we might want to
             // just return None and perform this as a separate method.
-            assert!(self.fdt.totalsize() > (self.curr_addr - self.fdt.base()));
+            assert!(self.fdt.totalsize() > self.offset);
+
             loop {
-                let ptr = *(self.curr_addr as *const u32_be);
-                match FromPrimitive::from_u32(u32::from(ptr)) {
+                let fdt_val = self.fdt.buf.read_be_u32(self.offset).unwrap();
+                let fdt_tok = FromPrimitive::from_u32(fdt_val);
+                self.offset += size_of::<u32_be>();
+                match fdt_tok {
                     Some(FdtTok::BeginNode) => {
-                        // Advance the node by sizeof tok
-                        self.curr_addr += size_of::<u32_be>();
-                        let c_str_start = self.curr_addr;
+                        let name = self.fdt.buf.read_bstring0(self.offset).unwrap();
 
-                        let mut c_str_end: usize = 0;
-                        let mut broke: bool = false;
-                        for c_addr in self.curr_addr..self.fdt.end() {
-                            if *(c_addr as *const u8) == 0 {
-                                // Include the null byte.
-                                c_str_end = c_addr + 1;
-                                broke = true;
-                                break;
-                            }
-                        }
-                        if !broke {
-                            panic!("Unable to find the end of the FdtNode name.")
-                        }
+                        // Move to next u32 alignment after the str (including null byte).
+                        self.offset += name.len() + 1;
+                        // Align back to u32.
+                        self.offset += self.fdt.buf.as_ptr().add(self.offset)
+                            .align_offset(size_of::<u32_be>());
 
-                        // Move to next u32 alignment after the str.
-                        let c_str_size = c_str_end - c_str_start;
-                        self.curr_addr += c_str_size;
-                        self.curr_addr +=
-                            (self.curr_addr as *const u8).align_offset(size_of::<u32_be>());
-
-                        let str_slice =
-                            core::slice::from_raw_parts(c_str_start as *const u8, c_str_size);
-                        return Some(FdtNode {
-                            name: core::str::from_utf8(str_slice).unwrap(),
+                        return Some(DeviceTreeNode {
+                            name: core::str::from_utf8(name).unwrap(),
                             fdt: self.fdt,
                         });
                     }
-                    Some(FdtTok::EndNode) => {
-                        // Advance the node by sizeof tok
-                        self.curr_addr += size_of::<u32_be>();
+                    Some(FdtTok::Prop) => {
+                        if self.offset + size_of::<fdt_reserve_entry>() > self.fdt.buf.len() {
+                            panic!("");
+                        }
+                        let prop_len =  u32::from((*transmute::<*const u8, *const fdt_prop_header>(
+                                self.fdt.buf.as_ptr().add(self.offset))).len);
+
+                        self.offset += (prop_len as usize) + size_of::<fdt_prop_header>();
+                        // Align back to u32.
+                        self.offset += self.fdt.buf.as_ptr().add(self.offset)
+                                       .align_offset(size_of::<u32_be>());
                         continue;
                     }
-                    Some(FdtTok::Prop) => {
-                        // Advance the node by sizeof tok + sizeof prop
-                        self.curr_addr += size_of::<u32_be>();
-                        let tmp =
-                            u32::from((*(self.curr_addr as *const fdt_prop_header)).len) as usize;
-                        self.curr_addr += tmp;
-                        self.curr_addr += size_of::<fdt_prop_header>();
-                        self.curr_addr +=
-                            (self.curr_addr as *const u8).align_offset(size_of::<u32_be>());
+                    Some(FdtTok::EndNode) => {
                         continue;
                     }
                     Some(FdtTok::Nop) => {
-                        // Advance the node by sizeof tok
-                        self.curr_addr += size_of::<u32_be>();
                         continue;
                     }
                     Some(FdtTok::End) => {
                         return None;
                     }
                     None => {
-                        panic!("Unknown FDT Token Value {:}", u32::from(ptr));
+                        panic!("Unknown FDT Token Value {:}", fdt_val);
                     }
                 };
+
             }
         }
     }
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct FdtBlob {
-    base: *const fdt_header,
+pub struct DeviceTree<'a> {
+    buf: &'a [u8],
 }
 
-impl FdtBlob {
+/// Retrive the size of the device tree without providing a sized header.
+///
+/// A buffer of MIN_HEADER_SIZE is required.
+pub unsafe fn read_totalsize(buf: &[u8]) -> Result<usize, DeviceTreeError> {
+    verify_magic(buf)?;
+    Ok(get_be32!(totalsize, fdt_header, buf)? as usize)
+}
 
-    /// # Safety
-    /// TODO
-    pub unsafe fn new(base: usize) -> Result<Self, ()> {
-        let header = base as *const fdt_header;
+fn verify_magic(buf: &[u8]) -> Result<(), DeviceTreeError> {
+    if get_be32!(magic, fdt_header, buf)? != FDT_MAGIC {
+        Err(DeviceTreeError::InvalidMagicNumber)
+    } else {
+        Ok(())
+    }
+}
 
-        if (*header).magic != 0xd00d_feed.into() {
-            return Err(());
+
+impl<'a> DeviceTree<'a> {
+    pub const MIN_HEADER_SIZE: usize = size_of::<fdt_header>();
+
+    pub unsafe fn new(buf: &'a [u8]) -> Result<Self, DeviceTreeError> {
+        if read_totalsize(buf)? < buf.len() {
+            Err(DeviceTreeError::InvalidLength)
+        } else {
+            Ok(Self { buf })
         }
-
-        Ok(Self {
-            base: base as *const fdt_header,
-        })
     }
 
-    fn header(&self) -> &fdt_header {
-        unsafe { &*self.base as &fdt_header }
+    fn totalsize(&self) -> usize {
+        get_be32!(totalsize, fdt_header, self.buf).unwrap() as usize
     }
-
-    #[inline]
-    #[must_use]
-    pub fn base(&self) -> usize {
-        self.base as usize
+    fn off_mem_rsvmap(&self) -> usize {
+        get_be32!(off_mem_rsvmap, fdt_header, self.buf).unwrap() as usize
     }
-
-    #[inline]
-    #[must_use]
-    pub fn totalsize(&self) -> usize {
-        u32::from(self.header().totalsize) as usize
+    fn off_dt_struct(&self) -> usize {
+        get_be32!(off_dt_struct, fdt_header, self.buf).unwrap() as usize
     }
-
-    /// Return the one past the last address of the fdt
-    pub(self) fn end(&self) -> usize {
-        self.base as usize + self.totalsize()
+    #[allow(dead_code)]
+    fn off_dt_strings(&self) -> usize {
+        get_be32!(off_dt_strings, fdt_header, self.buf).unwrap() as usize
     }
 
     /// An iterator over the Device Tree "5.3 Memory Reservation Blocks"
@@ -285,8 +281,8 @@ impl FdtBlob {
     /// An iterator over the Device Tree "5.3 Memory Reservation Blocks"
     #[inline]
     #[must_use]
-    pub fn nodes(&self) -> FdtNodeIter {
-        FdtNodeIter::new(self)
+    pub fn nodes(&self) -> DeviceTreeNodeIter {
+        DeviceTreeNodeIter::new(self)
     }
 }
 
@@ -309,7 +305,7 @@ mod tests {
         let _ = file.read_to_end(&mut vec).unwrap();
 
         unsafe {
-            let blob = crate::FdtBlob::new(vec.as_ptr() as usize).unwrap();
+            let blob = crate::DeviceTree::new(vec.as_slice()).unwrap();
             assert!(blob.reserved_entries().count() == 0);
         }
 
@@ -329,7 +325,7 @@ mod tests {
         let _ = file.read_to_end(&mut vec).unwrap();
 
         unsafe {
-            let blob = crate::FdtBlob::new(vec.as_ptr() as usize).unwrap();
+            let blob = crate::DeviceTree::new(vec.as_slice()).unwrap();
             for node in blob.nodes() {
                 println!("{}", node.name);
             }
