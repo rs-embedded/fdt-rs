@@ -5,7 +5,7 @@ pub fn align(val: usize, to: usize) -> usize {
     val + (to - (val % to)) % to
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum SliceReadError {
     UnexpectedEndOfInput,
 }

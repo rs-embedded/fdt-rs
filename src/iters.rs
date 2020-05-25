@@ -16,7 +16,6 @@ impl<'a> DevTreeReserveEntryIter<'a> {
 
     fn read(&self) -> Result<&'a fdt_reserve_entry, DevTreeError> {
         unsafe {
-            // TODO alignment not guarunteed.
             if self.offset + size_of::<fdt_reserve_entry>() > self.fdt.buf.len() {
                 Err(DevTreeError::InvalidLength)
             } else {
@@ -46,7 +45,7 @@ impl<'a> Iterator for DevTreeReserveEntryIter<'a> {
 pub struct ParsedNode<'a> {
     /// Offset of the property value within the FDT buffer.
     new_offset: usize,
-    name: Result<&'a str, Utf8Error>,
+    name: Result<&'a str, DevTreeError>,
 }
 pub struct ParsedProp {
     new_offset: usize,
@@ -84,6 +83,12 @@ impl<'a> DevTreeParseIter<'a> {
             dt_offset: fdt.off_dt_struct(),
             fdt,
         }
+    }
+
+    pub(crate) fn get_prop_str(&self, offset: usize) -> Result<&'a str, DevTreeError> {
+        let str_offset = self.fdt.off_dt_strings() + offset;
+        let name = self.fdt.buf.read_bstring0(str_offset)?;
+        return core::str::from_utf8(name).or(Err(DevTreeError::Utf8Error));
     }
 }
 
@@ -187,7 +192,7 @@ fn step_parse_device_tree<'a>(
                     offset += fdt.buf.as_ptr().add(offset).align_offset(size_of::<u32>());
 
                     return Ok(ParsedItem::Node(ParsedNode {
-                        name: core::str::from_utf8(name),
+                        name: core::str::from_utf8(name).or(Err(DevTreeError::Utf8Error)),
                         new_offset: offset,
                     }));
                 }

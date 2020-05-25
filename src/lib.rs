@@ -19,7 +19,6 @@ use util::{SliceRead, SliceReadError};
 
 use core::convert::From;
 use core::mem::{size_of, transmute};
-use core::str::Utf8Error;
 
 use num_traits::FromPrimitive;
 
@@ -37,7 +36,7 @@ macro_rules! get_be32_field {
 pub type Phandle = u32;
 
 /// An error describe parsing problems when creating device trees.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DevTreeError {
     /// The magic number FDT_MAGIC was not found at the start of the
     /// structure.
@@ -132,12 +131,12 @@ impl<'a> DevTree<'a> {
 }
 
 pub struct DevTreeNode<'a> {
-    pub name: Result<&'a str, Utf8Error>,
+    pub name: Result<&'a str, DevTreeError>,
     inner_iter: iters::DevTreeParseIter<'a>,
 }
 
 impl<'a> DevTreeNode<'a> {
-    fn new(name: Result<&'a str, Utf8Error>, inner_iter: iters::DevTreeParseIter<'a>) -> Self {
+    fn new(name: Result<&'a str, DevTreeError>, inner_iter: iters::DevTreeParseIter<'a>) -> Self {
         Self { name, inner_iter }
     }
     pub fn props(&'a self) -> iters::DevTreeNodePropIter<'a> {
@@ -147,14 +146,17 @@ impl<'a> DevTreeNode<'a> {
 
 pub struct DevTreeProp<'a> {
     iter: iters::DevTreeParseIter<'a>,
+    //TODO
+    #[allow(dead_code)]
     propoff: usize,
+    #[allow(dead_code)]
     length: usize,
     nameoff: usize,
 }
 
 impl<'a> DevTreeProp<'a> {
-    pub fn name(&self) -> Result<&'a str, Utf8Error> {
-        Ok("TODO!")
+    pub fn name(&self) -> Result<&'a str, DevTreeError> {
+        self.iter.get_prop_str(self.nameoff)
     }
 }
 
