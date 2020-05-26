@@ -83,12 +83,6 @@ impl<'a> DevTreeParseIter<'a> {
             fdt,
         }
     }
-
-    pub(crate) fn get_prop_str(&self, offset: usize) -> Result<&'a str, DevTreeError> {
-        let str_offset = self.fdt.off_dt_strings() + offset;
-        let name = self.fdt.buf.read_bstring0(str_offset)?;
-        return core::str::from_utf8(name).or(Err(DevTreeError::Utf8Error));
-    }
 }
 
 impl<'a> Iterator for DevTreeParseIter<'a> {

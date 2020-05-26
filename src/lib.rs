@@ -143,6 +143,7 @@ impl<'a> DevTreeNode<'a> {
     fn new(name: Result<&'a str, DevTreeError>, inner_iter: iters::DevTreeParseIter<'a>) -> Self {
         Self { name, inner_iter }
     }
+
     pub fn props(&'a self) -> iters::DevTreeNodePropIter<'a> {
         iters::DevTreeNodePropIter::new(self)
     }
@@ -156,7 +157,13 @@ pub struct DevTreeProp<'a> {
 
 impl<'a> DevTreeProp<'a> {
     pub fn name(&self) -> Result<&'a str, DevTreeError> {
-        self.iter.get_prop_str(self.nameoff)
+        self.get_prop_str()
+    }
+
+    fn get_prop_str(&self) -> Result<&'a str, DevTreeError> {
+        let str_offset = self.iter.fdt.off_dt_strings() + self.nameoff;
+        let name = self.iter.fdt.buf.read_bstring0(str_offset)?;
+        return core::str::from_utf8(name).or(Err(DevTreeError::Utf8Error));
     }
 
     pub fn length(&self) -> usize {
