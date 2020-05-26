@@ -50,7 +50,7 @@ pub struct ParsedNode<'a> {
 pub struct ParsedProp<'a> {
     new_offset: usize,
     /// Offset of the property value within the FDT buffer.
-    propbuf: &'a[u8],
+    propbuf: &'a [u8],
     nameoff: u32,
 }
 
@@ -145,11 +145,13 @@ impl<'a> Iterator for DevTreeNodePropIter<'a> {
         loop {
             let this = self.parse_iter;
             match self.parse_iter.next() {
-                Some(ParsedItem::Prop(p)) => return Some(Self::Item {
-                    iter: this,
-                    nameoff: p.nameoff as usize,
-                    propbuf: p.propbuf,
-                }),
+                Some(ParsedItem::Prop(p)) => {
+                    return Some(Self::Item {
+                        iter: this,
+                        nameoff: p.nameoff as usize,
+                        propbuf: p.propbuf,
+                    })
+                }
                 // Return if a new node or an EOF.
                 _ => return None,
             }
@@ -193,9 +195,9 @@ fn step_parse_device_tree<'a>(
                     let header: *const fdt_prop_header = fdt.ptr_at(offset);
                     let prop_len = u32::from((*header).len);
 
-
                     offset += size_of::<fdt_prop_header>();
-                    let propbuf = core::slice::from_raw_parts(fdt.ptr_at(offset), prop_len as usize);
+                    let propbuf =
+                        core::slice::from_raw_parts(fdt.ptr_at(offset), prop_len as usize);
                     offset += propbuf.len();
 
                     // Align back to u32.

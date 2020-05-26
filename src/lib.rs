@@ -193,7 +193,7 @@ impl<'a> DevTreeProp<'a> {
         let mut _s = dummy;
 
         match self.get_string(offset, Some(&mut _s)) {
-            Ok(_) =>  {
+            Ok(_) => {
                 assert!(dummy != _s);
                 Ok(_s)
             }
@@ -213,7 +213,11 @@ impl<'a> DevTreeProp<'a> {
         self.propbuf
     }
 
-    unsafe fn get_string(&'a self, offset: usize, opt_str: Option<&mut &'a str>) -> Result<usize, DevTreeError> {
+    unsafe fn get_string(
+        &'a self,
+        offset: usize,
+        opt_str: Option<&mut &'a str>,
+    ) -> Result<usize, DevTreeError> {
         match self.propbuf.read_bstring0(offset) {
             Ok(res_u8) => {
                 if res_u8.len() == 0 {
@@ -224,17 +228,15 @@ impl<'a> DevTreeProp<'a> {
                 let len = res_u8.len() + 1;
 
                 match opt_str {
-                    Some(s) =>  {
-                        match str::from_utf8(res_u8) {
-                            Ok(parsed_s) => {
-                                *s = parsed_s;
-                                return Ok(len);
-                            }
-                            Err(_) => {
-                                return Err(DevTreeError::Utf8Error);
-                            }
+                    Some(s) => match str::from_utf8(res_u8) {
+                        Ok(parsed_s) => {
+                            *s = parsed_s;
+                            return Ok(len);
                         }
-                    }
+                        Err(_) => {
+                            return Err(DevTreeError::Utf8Error);
+                        }
+                    },
                     None => {
                         return Ok(len);
                     }
@@ -244,7 +246,10 @@ impl<'a> DevTreeProp<'a> {
         }
     }
 
-    unsafe fn iter_str_list( &'a self, mut list_opt: Option<&mut [&'a str]>,) -> Result<usize, DevTreeError> {
+    unsafe fn iter_str_list(
+        &'a self,
+        mut list_opt: Option<&mut [&'a str]>,
+    ) -> Result<usize, DevTreeError> {
         let mut _s = "";
         let mut offset = 0;
         for count in 0.. {
@@ -258,7 +263,8 @@ impl<'a> DevTreeProp<'a> {
                         Some(&mut list[count])
                     } else {
                         None
-                    }},
+                    }
+                }
                 None => None,
             };
             offset += self.get_string(offset, s)?;
