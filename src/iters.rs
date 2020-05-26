@@ -47,17 +47,16 @@ pub struct ParsedNode<'a> {
     new_offset: usize,
     name: Result<&'a str, DevTreeError>,
 }
-pub struct ParsedProp {
+pub struct ParsedProp<'a> {
     new_offset: usize,
     /// Offset of the property value within the FDT buffer.
-    propoff: usize,
-    length: u32,
+    propbuf: &'a[u8],
     nameoff: u32,
 }
 
 pub enum ParsedItem<'a> {
     Node(ParsedNode<'a>),
-    Prop(ParsedProp),
+    Prop(ParsedProp<'a>),
 }
 
 // Static trait
@@ -155,8 +154,7 @@ impl<'a> Iterator for DevTreeNodePropIter<'a> {
                 Some(ParsedItem::Prop(p)) => return Some(Self::Item {
                     iter: this,
                     nameoff: p.nameoff as usize,
-                    length: p.length as usize,
-                    propoff: p.propoff,
+                    propbuf: p.propbuf,
                 }),
                 // Return if a new node or an EOF.
                 _ => return None,
@@ -201,17 +199,17 @@ fn step_parse_device_tree<'a>(
                     let header: *const fdt_prop_header = fdt.ptr_at(offset);
                     let prop_len = u32::from((*header).len);
 
+
                     offset += size_of::<fdt_prop_header>();
-                    let propoff = offset;
-                    offset += prop_len as usize;
+                    let propbuf = core::slice::from_raw_parts(fdt.ptr_at(offset), prop_len as usize);
+                    offset += propbuf.len();
 
                     // Align back to u32.
                     offset += fdt.buf.as_ptr().add(offset).align_offset(size_of::<u32>());
                     return Ok(ParsedItem::Prop(ParsedProp {
                         new_offset: offset,
-                        propoff,
-                        length: prop_len,
-                        nameoff: u32::from((*header).nameoff)
+                        nameoff: u32::from((*header).nameoff),
+                        propbuf,
                     }));
                 }
                 Some(FdtTok::EndNode) => {}

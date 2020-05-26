@@ -150,11 +150,7 @@ impl<'a> DevTreeNode<'a> {
 
 pub struct DevTreeProp<'a> {
     iter: iters::DevTreeParseIter<'a>,
-    //TODO
-    #[allow(dead_code)]
-    propoff: usize,
-    #[allow(dead_code)]
-    length: usize,
+    propbuf: &'a [u8],
     nameoff: usize,
 }
 
@@ -164,70 +160,103 @@ impl<'a> DevTreeProp<'a> {
     }
 
     pub fn length(&self) -> usize {
-        self.length
+        self.propbuf.len()
     }
 
-    pub unsafe fn get_u32(&self) -> Result<u32, DevTreeError> {
-        self.iter.fdt.buf.read_be_u32(self.propoff).or(Err(DevTreeError::InvalidLength))
+    pub unsafe fn get_u32(&self, offset: usize) -> Result<u32, DevTreeError> {
+        self.propbuf
+            .read_be_u32(offset)
+            .or(Err(DevTreeError::InvalidLength))
     }
 
-    pub unsafe fn get_u64(&self) -> Result<u64, DevTreeError> {
-        self.iter.fdt.buf.read_be_u64(self.propoff).or(Err(DevTreeError::InvalidLength))
+    pub unsafe fn get_u64(&self, offset: usize) -> Result<u64, DevTreeError> {
+        self.propbuf
+            .read_be_u64(offset)
+            .or(Err(DevTreeError::InvalidLength))
     }
 
-    pub unsafe fn get_phandle(&self) -> Result<Phandle, DevTreeError> {
-        self.iter.fdt.buf.read_be_u32(self.propoff).or(Err(DevTreeError::InvalidLength))
+    pub unsafe fn get_phandle(&self, offset: usize) -> Result<Phandle, DevTreeError> {
+        self.propbuf
+            .read_be_u32(offset)
+            .or(Err(DevTreeError::InvalidLength))
     }
 
-    pub unsafe fn get_str(&self) -> Result<&'a str, DevTreeError> {
-        let mut slice = [""];
-        self.iter_str_list(Some(&mut slice)).and(Ok(slice[0]))
+    pub unsafe fn get_str(&'a self, offset: usize) -> Result<&'a str, DevTreeError> {
+        let dummy = "";
+        let mut _s = dummy;
+
+        match self.get_string(offset, Some(&mut _s)) {
+            Ok(_) =>  {
+                assert!(dummy != _s);
+                Ok(_s)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub unsafe fn get_str_count(&self) -> Result<usize, DevTreeError> {
         self.iter_str_list(None)
     }
 
-    pub unsafe fn get_strlist(&self, list: &mut[&'a str]) -> Result<usize, DevTreeError> {
+    pub unsafe fn get_strlist(&'a self, list: &mut [&'a str]) -> Result<usize, DevTreeError> {
         self.iter_str_list(Some(list))
     }
 
-    pub unsafe fn get_raw_buf(&self) -> &'a [u8] {
-        &self.iter.fdt.buf[self.propoff..self.propoff + self.length]
+    pub unsafe fn get_raw(&self) -> &'a [u8] {
+        self.propbuf
     }
 
-    fn iter_str_list(&self, mut list_opt: Option<&mut[&'a str]>) -> Result<usize, DevTreeError>  {
-        let mut bytes = 0;
-        for count in 0.. {
-            if bytes >= self.length {
-                return Ok(count);
-            }
-            if let Some(l) = &mut list_opt {
-                if l.len() <= count {
-                    return Err(DevTreeError::InvalidLength)
+    unsafe fn get_string(&'a self, offset: usize, opt_str: Option<&mut &'a str>) -> Result<usize, DevTreeError> {
+        match self.propbuf.read_bstring0(offset) {
+            Ok(res_u8) => {
+                if res_u8.len() == 0 {
+                    return Err(DevTreeError::InvalidLength);
                 }
-            }
 
-            // Read until length is reached
-            match self.iter.fdt.buf.read_bstring0_bounded(self.propoff + bytes, self.length - bytes) {
-                Ok(res_u8) => {
-                    if res_u8.len() == 0 {
-                        return Err(DevTreeError::Utf8Error);
-                    }
+                // Include null byte
+                let len = res_u8.len() + 1;
 
-                    // Add null byte
-                    bytes += res_u8.len() + 1;
-
-                    if let Some(l) = &mut list_opt {
+                match opt_str {
+                    Some(s) =>  {
                         match str::from_utf8(res_u8) {
-                            Ok(s) => l[count] = s,
-                            Err(_) => return Err(DevTreeError::Utf8Error),
+                            Ok(parsed_s) => {
+                                *s = parsed_s;
+                                return Ok(len);
+                            }
+                            Err(_) => {
+                                return Err(DevTreeError::Utf8Error);
+                            }
                         }
                     }
-                },
-                Err(e) => return Err(DevTreeError::SliceReadError(e)),
-            };
+                    None => {
+                        return Ok(len);
+                    }
+                }
+            }
+            Err(e) => Err(e.into()),
         }
+    }
+
+    unsafe fn iter_str_list( &'a self, mut list_opt: Option<&mut [&'a str]>,) -> Result<usize, DevTreeError> {
+        let mut _s = "";
+        let mut offset = 0;
+        for count in 0.. {
+            if offset == self.length() {
+                return Ok(count);
+            }
+
+            let s = match &mut list_opt {
+                Some(list) => {
+                    if list.len() > count {
+                        Some(&mut list[count])
+                    } else {
+                        None
+                    }},
+                None => None,
+            };
+            offset += self.get_string(offset, s)?;
+        }
+        // For some reason infinite for loops need unreachable.
         unreachable!();
     }
 }
@@ -242,7 +271,6 @@ mod tests {
 
     #[test]
     fn reserved_entries_iter() {
-
         let mut file = File::open("test/riscv64-virt.dtb").unwrap();
         let mut vec: Vec<u8> = Vec::new();
         let _ = file.read_to_end(&mut vec).unwrap();
@@ -290,13 +318,13 @@ mod tests {
                 for prop in node.props() {
                     println!("\t{}", prop.name().unwrap());
                     if prop.length() == size_of::<u32>() {
-                        println!("\t\t0x{:x}", prop.get_u32().unwrap());
+                        //println!("\t\t0x{:x}", prop.get_u32(0).unwrap());
                     }
-                    if prop.length > 0 {
+                    if prop.length() > 0 {
                         let i = prop.get_str_count();
                         if i.is_ok() {
-                            if i.unwrap() == 0 { 
-                                break; 
+                            if i.unwrap() == 0 {
+                                break;
                             }
                             let mut vec: Vec<&str> = vec![&dummy; i.unwrap()];
                             prop.get_strlist(&mut vec).unwrap();
