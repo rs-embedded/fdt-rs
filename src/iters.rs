@@ -201,8 +201,9 @@ fn step_parse_device_tree<'a>(
                     let header: *const fdt_prop_header = fdt.ptr_at(offset);
                     let prop_len = u32::from((*header).len);
 
-                    offset += (prop_len as usize) + size_of::<fdt_prop_header>();
+                    offset += size_of::<fdt_prop_header>();
                     let propoff = offset;
+                    offset += prop_len as usize;
 
                     // Align back to u32.
                     offset += fdt.buf.as_ptr().add(offset).align_offset(size_of::<u32>());
