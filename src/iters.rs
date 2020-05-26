@@ -90,10 +90,9 @@ impl<'a> Iterator for DevTreeParseIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let res = step_parse_device_tree(self.dt_offset, self.fdt);
-        if res.is_ok() {
-            let un = res.unwrap();
-            self.dt_offset = un.new_offset();
-            return Some(un);
+        if let Ok(res) = res {
+            self.dt_offset = res.new_offset();
+            return Some(res);
         }
         None
     }
@@ -142,19 +141,15 @@ impl<'a> DevTreeNodePropIter<'a> {
 impl<'a> Iterator for DevTreeNodePropIter<'a> {
     type Item = DevTreeProp<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let this = self.parse_iter;
-            match self.parse_iter.next() {
-                Some(ParsedItem::Prop(p)) => {
-                    return Some(Self::Item {
-                        iter: this,
-                        nameoff: p.nameoff as usize,
-                        propbuf: p.propbuf,
-                    })
-                }
-                // Return if a new node or an EOF.
-                _ => return None,
-            }
+        let this = self.parse_iter;
+        match self.parse_iter.next() {
+            Some(ParsedItem::Prop(p)) => Some(Self::Item {
+                iter: this,
+                nameoff: p.nameoff as usize,
+                propbuf: p.propbuf,
+            }),
+            // Return if a new node or an EOF.
+            _ => None,
         }
     }
 }

@@ -1,4 +1,6 @@
-pub use core::{convert, fmt, option, result, str};
+use core::mem::size_of;
+use core::ptr::read_unaligned;
+pub use core::{convert, fmt, option, result};
 
 #[inline]
 pub fn align(val: usize, to: usize) -> usize {
@@ -22,30 +24,28 @@ pub trait SliceRead {
 impl<'a> SliceRead for &'a [u8] {
     fn read_be_u32(&self, pos: usize) -> SliceReadResult<u32> {
         // check size is valid
-        if !(pos + 4 <= self.len()) {
+        if pos + size_of::<u32>() > self.len() {
             return Err(SliceReadError::UnexpectedEndOfInput);
         }
 
-        Ok((self[pos] as u32) << 24
-            | (self[pos + 1] as u32) << 16
-            | (self[pos + 2] as u32) << 8
-            | (self[pos + 3] as u32))
+        // We explicitly read unaligned.
+        #[allow(clippy::cast_ptr_alignment)]
+        unsafe {
+            Ok(read_unaligned::<u32>(self.as_ptr().add(pos) as *const u32).to_be())
+        }
     }
 
     fn read_be_u64(&self, pos: usize) -> SliceReadResult<u64> {
         // check size is valid
-        if !(pos + 8 <= self.len()) {
+        if pos + size_of::<u64>() > self.len() {
             return Err(SliceReadError::UnexpectedEndOfInput);
         }
 
-        Ok((self[pos] as u64) << 56
-            | (self[pos + 1] as u64) << 48
-            | (self[pos + 2] as u64) << 40
-            | (self[pos + 3] as u64) << 32
-            | (self[pos + 4] as u64) << 24
-            | (self[pos + 5] as u64) << 16
-            | (self[pos + 6] as u64) << 8
-            | (self[pos + 7] as u64))
+        // We explicitly read unaligned.
+        #[allow(clippy::cast_ptr_alignment)]
+        unsafe {
+            Ok(read_unaligned::<u64>(self.as_ptr().add(pos) as *const u64).to_be())
+        }
     }
 
     fn read_bstring0(&self, pos: usize) -> SliceReadResult<&[u8]> {
@@ -61,7 +61,7 @@ impl<'a> SliceRead for &'a [u8] {
     }
 
     fn subslice(&self, start: usize, end: usize) -> SliceReadResult<&[u8]> {
-        if !(end < self.len()) {
+        if !end < self.len() {
             return Err(SliceReadError::UnexpectedEndOfInput);
         }
 

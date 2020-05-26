@@ -69,6 +69,8 @@ pub struct DevTree<'a> {
     buf: &'a [u8],
 }
 
+/// # Safety
+/// TODO
 /// Retrive the size of the device tree without providing a sized header.
 ///
 /// A buffer of MIN_HEADER_SIZE is required.
@@ -88,6 +90,8 @@ fn verify_magic(buf: &[u8]) -> Result<(), DevTreeError> {
 impl<'a> DevTree<'a> {
     pub const MIN_HEADER_SIZE: usize = size_of::<fdt_header>();
 
+    /// # Safety
+    /// TODO
     pub unsafe fn new(buf: &'a [u8]) -> Result<Self, DevTreeError> {
         if read_totalsize(buf)? < buf.len() {
             Err(DevTreeError::InvalidLength)
@@ -113,6 +117,8 @@ impl<'a> DevTree<'a> {
         get_be32_field!(off_dt_strings, fdt_header, self.buf).unwrap() as usize
     }
 
+    /// # Safety
+    /// TODO
     unsafe fn ptr_at<T>(&self, offset: usize) -> *const T {
         self.buf.as_ptr().add(offset) as *const T
     }
@@ -163,31 +169,39 @@ impl<'a> DevTreeProp<'a> {
     fn get_prop_str(&self) -> Result<&'a str, DevTreeError> {
         let str_offset = self.iter.fdt.off_dt_strings() + self.nameoff;
         let name = self.iter.fdt.buf.read_bstring0(str_offset)?;
-        return core::str::from_utf8(name).or(Err(DevTreeError::Utf8Error));
+        core::str::from_utf8(name).or(Err(DevTreeError::Utf8Error))
     }
 
     pub fn length(&self) -> usize {
         self.propbuf.len()
     }
 
+    /// # Safety
+    /// TODO
     pub unsafe fn get_u32(&self, offset: usize) -> Result<u32, DevTreeError> {
         self.propbuf
             .read_be_u32(offset)
             .or(Err(DevTreeError::InvalidLength))
     }
 
+    /// # Safety
+    /// TODO
     pub unsafe fn get_u64(&self, offset: usize) -> Result<u64, DevTreeError> {
         self.propbuf
             .read_be_u64(offset)
             .or(Err(DevTreeError::InvalidLength))
     }
 
+    /// # Safety
+    /// TODO
     pub unsafe fn get_phandle(&self, offset: usize) -> Result<Phandle, DevTreeError> {
         self.propbuf
             .read_be_u32(offset)
             .or(Err(DevTreeError::InvalidLength))
     }
 
+    /// # Safety
+    /// TODO
     pub unsafe fn get_str(&'a self, offset: usize) -> Result<&'a str, DevTreeError> {
         let dummy = "";
         let mut _s = dummy;
@@ -201,18 +215,26 @@ impl<'a> DevTreeProp<'a> {
         }
     }
 
+    /// # Safety
+    /// TODO
     pub unsafe fn get_str_count(&self) -> Result<usize, DevTreeError> {
         self.iter_str_list(None)
     }
 
+    /// # Safety
+    /// TODO
     pub unsafe fn get_strlist(&'a self, list: &mut [&'a str]) -> Result<usize, DevTreeError> {
         self.iter_str_list(Some(list))
     }
 
+    /// # Safety
+    /// TODO
     pub unsafe fn get_raw(&self) -> &'a [u8] {
         self.propbuf
     }
 
+    /// # Safety
+    /// TODO
     unsafe fn get_string(
         &'a self,
         offset: usize,
@@ -220,7 +242,7 @@ impl<'a> DevTreeProp<'a> {
     ) -> Result<usize, DevTreeError> {
         match self.propbuf.read_bstring0(offset) {
             Ok(res_u8) => {
-                if res_u8.len() == 0 {
+                if res_u8.is_empty() {
                     return Err(DevTreeError::InvalidLength);
                 }
 
@@ -231,21 +253,19 @@ impl<'a> DevTreeProp<'a> {
                     Some(s) => match str::from_utf8(res_u8) {
                         Ok(parsed_s) => {
                             *s = parsed_s;
-                            return Ok(len);
+                            Ok(len)
                         }
-                        Err(_) => {
-                            return Err(DevTreeError::Utf8Error);
-                        }
+                        Err(_) => Err(DevTreeError::Utf8Error),
                     },
-                    None => {
-                        return Ok(len);
-                    }
+                    None => Ok(len),
                 }
             }
             Err(e) => Err(e.into()),
         }
     }
 
+    /// # Safety
+    /// TODO
     unsafe fn iter_str_list(
         &'a self,
         mut list_opt: Option<&mut [&'a str]>,
@@ -277,10 +297,8 @@ impl<'a> DevTreeProp<'a> {
 #[cfg(test)]
 mod tests {
     use core::mem::size_of;
-    use std::env::current_exe;
     use std::fs::File;
     use std::io::Read;
-    use std::path::Path;
 
     #[test]
     fn reserved_entries_iter() {
