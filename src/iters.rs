@@ -1,4 +1,11 @@
-use super::*;
+use core::mem::size_of;
+
+use num_traits::FromPrimitive;
+
+use crate::{Str, bytes_as_str};
+use super::buf_util::{SliceRead};
+use super::{DevTree, DevTreeNode, DevTreeProp, DevTreeError};
+use super::spec::{FdtTok, fdt_prop_header, fdt_reserve_entry};
 
 #[derive(Clone, Debug)]
 pub struct DevTreeReserveEntryIter<'a> {
@@ -16,11 +23,7 @@ impl<'a> DevTreeReserveEntryIter<'a> {
 
     fn read(&self) -> Result<&'a fdt_reserve_entry, DevTreeError> {
         unsafe {
-            if self.offset + size_of::<fdt_reserve_entry>() > self.fdt.buf.len() {
-                Err(DevTreeError::InvalidLength)
-            } else {
-                Ok(&*self.fdt.ptr_at(self.offset))
-            }
+            Ok(&*self.fdt.ptr_at(self.offset)?)
         }
     }
 }
@@ -89,8 +92,8 @@ impl<'a> Iterator for DevTreeParseIter<'a> {
     type Item = ParsedItem<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let res = step_parse_device_tree(self.dt_offset, self.fdt);
-        if let Ok(res) = res {
+        let res = next_devtree_token(self.dt_offset, self.fdt);
+        if let Ok(Some(res)) = res {
             self.dt_offset = res.new_offset();
             return Some(res);
         }
@@ -154,62 +157,59 @@ impl<'a> Iterator for DevTreeNodePropIter<'a> {
     }
 }
 
-fn step_parse_device_tree<'a>(
+#[inline]
+fn next_devtree_token<'a>(
     mut offset: usize,
     fdt: &'a DevTree,
-) -> Result<ParsedItem<'a>, DevTreeError> {
+) -> Result<Option<ParsedItem<'a>>, DevTreeError> {
     unsafe {
-        // Assert because we should end before the FDT_END occurs
-        //
-        // Since the intent of this library is to execute in a safety context, we might want to
-        // just return None and perform this as a separate method.
-        assert!(fdt.totalsize() > offset);
         loop {
-            let fdt_val = fdt.buf.read_be_u32(offset)?;
-            let fdt_tok = FromPrimitive::from_u32(fdt_val);
+            // Verify alignment. 
+            assert!(offset % size_of::<u32>() == 0);
+            // The size will be checked when reads are performed.
+            // (We manage this internally so this will never fail.)
+            let fdt_tok_val = fdt.buf.unsafe_read_be_u32(offset)?;
+            let fdt_tok = FromPrimitive::from_u32(fdt_tok_val);
             offset += size_of::<u32>();
 
             match fdt_tok {
                 Some(FdtTok::BeginNode) => {
                     let name = fdt.buf.read_bstring0(offset)?;
 
-                    // Move to next u32 alignment after the str (including null byte).
+                    // Move to the end of str (adding for null byte).
                     offset += name.len() + 1;
-                    // Align back to u32.
+                    // Per spec - align back to u32.
                     offset += fdt.buf.as_ptr().add(offset).align_offset(size_of::<u32>());
 
-                    return Ok(ParsedItem::Node(ParsedNode {
+                    return Ok(Some(ParsedItem::Node(ParsedNode {
                         name: bytes_as_str(name).map_err(|e| e.into()),
                         new_offset: offset,
-                    }));
+                    })));
                 }
                 Some(FdtTok::Prop) => {
-                    if offset + size_of::<fdt_reserve_entry>() > fdt.buf.len() {
-                        panic!("");
-                    }
-                    let header: *const fdt_prop_header = fdt.ptr_at(offset);
-                    let prop_len = u32::from((*header).len);
+                    let header: *const fdt_prop_header = fdt.ptr_at(offset)?;
+                    let prop_len = u32::from((*header).len) as usize;
 
                     offset += size_of::<fdt_prop_header>();
-                    let propbuf =
-                        core::slice::from_raw_parts(fdt.ptr_at(offset), prop_len as usize);
+                    let propbuf = &fdt.buf[offset..offset+prop_len];
                     offset += propbuf.len();
 
                     // Align back to u32.
                     offset += fdt.buf.as_ptr().add(offset).align_offset(size_of::<u32>());
-                    return Ok(ParsedItem::Prop(ParsedProp {
+                    return Ok(Some(ParsedItem::Prop(ParsedProp {
                         new_offset: offset,
                         nameoff: u32::from((*header).nameoff),
                         propbuf,
-                    }));
+                    })));
                 }
                 Some(FdtTok::EndNode) => {}
                 Some(FdtTok::Nop) => {}
                 Some(FdtTok::End) => {
-                    return Err(DevTreeError::Eof);
+                    return Ok(None)
                 }
                 None => {
-                    panic!("Unknown FDT Token Value {:}", fdt_val);
+                    // Invalid token
+                    return Err(DevTreeError::ParseError);
                 }
             }
         }

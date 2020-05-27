@@ -5,15 +5,25 @@
 #![allow(clippy::as_conversions)]
 #![allow(clippy::print_stdout)]
 #![allow(clippy::implicit_return)]
-#![cfg_attr(not(feature = "std"), no_std)]
 
+
+#![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
 extern crate core;
+#[macro_use]
+extern crate cfg_if;
 extern crate endian_type;
 #[macro_use]
 extern crate memoffset;
-#[macro_use]
-extern crate cfg_if;
+
+pub mod spec;
+mod iters;
+mod buf_util;
+
+use core::convert::From;
+use core::mem::size_of;
+use buf_util::{SliceRead, SliceReadError};
+use spec::{Phandle, fdt_header, FDT_MAGIC};
 
 cfg_if! {
     if #[cfg(feature = "ascii")] {
@@ -34,25 +44,11 @@ cfg_if! {
     }
 }
 
-pub mod util;
-use util::{SliceRead, SliceReadError};
-
-use core::convert::From;
-use core::mem::size_of;
-
-use num_traits::FromPrimitive;
-
-mod iters;
-pub mod spec;
-use spec::*;
-
 macro_rules! get_be32_field {
     ( $f:ident, $s:ident , $buf:expr ) => {
         $buf.read_be_u32(offset_of!($s, $f))
     };
 }
-
-pub type Phandle = u32;
 
 /// An error describe parsing problems when creating device trees.
 #[derive(Debug, Clone, Copy)]
@@ -61,16 +57,16 @@ pub enum DevTreeError {
     /// structure.
     InvalidMagicNumber,
 
-    /// TODO
-    InvalidLength,
-    /// Failed to read data from slice.
-    SliceReadError(SliceReadError),
+    /// Unable to safely read data from the given device tree using the supplied offset 
+    InvalidOffset,
 
     /// The data format was not as expected at the given buffer offset
-    ParseError(usize),
+    ParseError,
 
     /// While trying to convert a string that was supposed to be ASCII, invalid
-    /// utf8 sequences were encounted
+    /// `Str` sequences were encounter. 
+    ///
+    /// Note, the underlying type will differ based on use of the `ascii` feature.
     StrError(StrError),
 
     /// The device tree version is not supported by this library.
@@ -79,8 +75,8 @@ pub enum DevTreeError {
 }
 
 impl From<SliceReadError> for DevTreeError {
-    fn from(e: SliceReadError) -> DevTreeError {
-        DevTreeError::SliceReadError(e)
+    fn from(_: SliceReadError) -> DevTreeError {
+        DevTreeError::ParseError
     }
 }
 
@@ -97,15 +93,16 @@ pub struct DevTree<'a> {
 
 /// # Safety
 /// TODO
-/// Retrive the size of the device tree without providing a sized header.
+/// Retrieve the size of the device tree without providing a sized header.
 ///
 /// A buffer of MIN_HEADER_SIZE is required.
+#[inline]
 pub unsafe fn read_totalsize(buf: &[u8]) -> Result<usize, DevTreeError> {
     verify_magic(buf)?;
     Ok(get_be32_field!(totalsize, fdt_header, buf)? as usize)
 }
 
-fn verify_magic(buf: &[u8]) -> Result<(), DevTreeError> {
+unsafe fn verify_magic(buf: &[u8]) -> Result<(), DevTreeError> {
     if get_be32_field!(magic, fdt_header, buf)? != FDT_MAGIC {
         Err(DevTreeError::InvalidMagicNumber)
     } else {
@@ -120,33 +117,45 @@ impl<'a> DevTree<'a> {
     /// TODO
     pub unsafe fn new(buf: &'a [u8]) -> Result<Self, DevTreeError> {
         if read_totalsize(buf)? < buf.len() {
-            Err(DevTreeError::InvalidLength)
+            Err(DevTreeError::ParseError)
         } else {
             Ok(Self { buf })
         }
     }
 
     fn totalsize(&self) -> usize {
-        get_be32_field!(totalsize, fdt_header, self.buf).unwrap() as usize
+        unsafe {
+            get_be32_field!(totalsize, fdt_header, self.buf).unwrap() as usize
+        }
     }
 
     fn off_mem_rsvmap(&self) -> usize {
-        get_be32_field!(off_mem_rsvmap, fdt_header, self.buf).unwrap() as usize
+        unsafe {
+            get_be32_field!(off_mem_rsvmap, fdt_header, self.buf).unwrap() as usize
+        }
     }
 
     fn off_dt_struct(&self) -> usize {
-        get_be32_field!(off_dt_struct, fdt_header, self.buf).unwrap() as usize
+        unsafe {
+            get_be32_field!(off_dt_struct, fdt_header, self.buf).unwrap() as usize
+        }
     }
 
     #[allow(dead_code)]
     fn off_dt_strings(&self) -> usize {
-        get_be32_field!(off_dt_strings, fdt_header, self.buf).unwrap() as usize
+        unsafe {
+            get_be32_field!(off_dt_strings, fdt_header, self.buf).unwrap() as usize
+        }
     }
 
     /// # Safety
     /// TODO
-    unsafe fn ptr_at<T>(&self, offset: usize) -> *const T {
-        self.buf.as_ptr().add(offset) as *const T
+    unsafe fn ptr_at<T>(&self, offset: usize) -> Result<*const T, DevTreeError> {
+        if offset + size_of::<T>() > self.buf.len() {
+            Err(DevTreeError::InvalidOffset)
+        } else {
+            Ok(self.buf.as_ptr().add(offset) as *const T)
+        }
     }
 
     /// An iterator over the Dev Tree "5.3 Memory Reservation Blocks"
@@ -193,9 +202,11 @@ impl<'a> DevTreeProp<'a> {
     }
 
     fn get_prop_str(&self) -> Result<&'a Str, DevTreeError> {
-        let str_offset = self.iter.fdt.off_dt_strings() + self.nameoff;
-        let name = self.iter.fdt.buf.read_bstring0(str_offset)?;
-        Ok(bytes_as_str(name)?)
+        unsafe {
+            let str_offset = self.iter.fdt.off_dt_strings() + self.nameoff;
+            let name = self.iter.fdt.buf.read_bstring0(str_offset)?;
+            Ok(bytes_as_str(name)?)
+        }
     }
 
     pub fn length(&self) -> usize {
@@ -207,7 +218,7 @@ impl<'a> DevTreeProp<'a> {
     pub unsafe fn get_u32(&self, offset: usize) -> Result<u32, DevTreeError> {
         self.propbuf
             .read_be_u32(offset)
-            .or(Err(DevTreeError::InvalidLength))
+            .or(Err(DevTreeError::InvalidOffset))
     }
 
     /// # Safety
@@ -215,7 +226,7 @@ impl<'a> DevTreeProp<'a> {
     pub unsafe fn get_u64(&self, offset: usize) -> Result<u64, DevTreeError> {
         self.propbuf
             .read_be_u64(offset)
-            .or(Err(DevTreeError::InvalidLength))
+            .or(Err(DevTreeError::InvalidOffset))
     }
 
     /// # Safety
@@ -223,7 +234,7 @@ impl<'a> DevTreeProp<'a> {
     pub unsafe fn get_phandle(&self, offset: usize) -> Result<Phandle, DevTreeError> {
         self.propbuf
             .read_be_u32(offset)
-            .or(Err(DevTreeError::InvalidLength))
+            .or(Err(DevTreeError::InvalidOffset))
     }
 
     /// # Safety
@@ -261,7 +272,7 @@ impl<'a> DevTreeProp<'a> {
         match self.propbuf.read_bstring0(offset) {
             Ok(res_u8) => {
                 if res_u8.is_empty() {
-                    return Err(DevTreeError::InvalidLength);
+                    return Err(DevTreeError::InvalidOffset);
                 }
 
                 // Include null byte
