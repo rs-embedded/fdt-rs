@@ -22,10 +22,12 @@ default-features = false
 [dependencies.memoffset]
 version = "0.5.4"
 default-features = false
-
-#[dependencies.ascii]
-#version = "1.0.0"
-#default-features = false
+[dependencies.cfg-if]
+cfg-if = "0.1"
+[dependencies.ascii]
+version = "1.0.0"
+default-features = false
+optional = true
 
 [features]
 default = []#["std"]

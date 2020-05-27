@@ -45,7 +45,7 @@ impl<'a> Iterator for DevTreeReserveEntryIter<'a> {
 pub struct ParsedNode<'a> {
     /// Offset of the property value within the FDT buffer.
     new_offset: usize,
-    name: Result<&'a str, DevTreeError>,
+    name: Result<&'a Str, DevTreeError>,
 }
 pub struct ParsedProp<'a> {
     new_offset: usize,
@@ -179,7 +179,7 @@ fn step_parse_device_tree<'a>(
                     offset += fdt.buf.as_ptr().add(offset).align_offset(size_of::<u32>());
 
                     return Ok(ParsedItem::Node(ParsedNode {
-                        name: core::str::from_utf8(name).map_err(|e| e.into()),
+                        name: bytes_as_str(name).map_err(|e| e.into()),
                         new_offset: offset,
                     }));
                 }

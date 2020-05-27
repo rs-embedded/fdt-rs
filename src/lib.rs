@@ -12,9 +12,29 @@ extern crate core;
 extern crate endian_type;
 #[macro_use]
 extern crate memoffset;
+#[macro_use]
+extern crate cfg_if;
+
+cfg_if! {
+    if #[cfg(feature = "ascii")] {
+        extern crate ascii;
+
+        pub type StrError = ascii::AsAsciiStrError;
+        pub type Str = ascii::AsciiStr;
+        fn bytes_as_str(buf: &[u8]) -> Result<& Str, StrError> {
+            ascii::AsciiStr::from_ascii(buf)
+        }
+    } else {
+
+        pub type StrError = core::str::Utf8Error;
+        pub type Str = str;
+        fn bytes_as_str(buf: &[u8]) -> Result<& Str, StrError> {
+            core::str::from_utf8(buf)
+        }
+    }
+}
 
 pub mod util;
-use core::str;
 use util::{SliceRead, SliceReadError};
 
 use core::convert::From;
@@ -51,7 +71,7 @@ pub enum DevTreeError {
 
     /// While trying to convert a string that was supposed to be ASCII, invalid
     /// utf8 sequences were encounted
-    Utf8Error(core::str::Utf8Error),
+    StrError(StrError),
 
     /// The device tree version is not supported by this library.
     VersionNotSupported,
@@ -64,9 +84,9 @@ impl From<SliceReadError> for DevTreeError {
     }
 }
 
-impl From<core::str::Utf8Error> for DevTreeError {
-    fn from(e: core::str::Utf8Error) -> DevTreeError {
-        DevTreeError::Utf8Error(e)
+impl From<StrError> for DevTreeError {
+    fn from(e: StrError) -> DevTreeError {
+        DevTreeError::StrError(e)
     }
 }
 
@@ -147,12 +167,12 @@ impl<'a> DevTree<'a> {
 }
 
 pub struct DevTreeNode<'a> {
-    pub name: Result<&'a str, DevTreeError>,
+    pub name: Result<&'a Str, DevTreeError>,
     inner_iter: iters::DevTreeParseIter<'a>,
 }
 
 impl<'a> DevTreeNode<'a> {
-    fn new(name: Result<&'a str, DevTreeError>, inner_iter: iters::DevTreeParseIter<'a>) -> Self {
+    fn new(name: Result<&'a Str, DevTreeError>, inner_iter: iters::DevTreeParseIter<'a>) -> Self {
         Self { name, inner_iter }
     }
 
@@ -168,14 +188,14 @@ pub struct DevTreeProp<'a> {
 }
 
 impl<'a> DevTreeProp<'a> {
-    pub fn name(&self) -> Result<&'a str, DevTreeError> {
+    pub fn name(&self) -> Result<&'a Str, DevTreeError> {
         self.get_prop_str()
     }
 
-    fn get_prop_str(&self) -> Result<&'a str, DevTreeError> {
+    fn get_prop_str(&self) -> Result<&'a Str, DevTreeError> {
         let str_offset = self.iter.fdt.off_dt_strings() + self.nameoff;
         let name = self.iter.fdt.buf.read_bstring0(str_offset)?;
-        Ok(core::str::from_utf8(name)?)
+        Ok(bytes_as_str(name)?)
     }
 
     pub fn length(&self) -> usize {
@@ -208,15 +228,11 @@ impl<'a> DevTreeProp<'a> {
 
     /// # Safety
     /// TODO
-    pub unsafe fn get_str(&'a self, offset: usize) -> Result<&'a str, DevTreeError> {
-        let dummy = "";
-        let mut _s = dummy;
-
-        match self.get_string(offset, Some(&mut _s)) {
-            Ok(_) => {
-                assert!(dummy != _s);
-                Ok(_s)
-            }
+    pub unsafe fn get_str(&'a self, offset: usize) -> Result<&'a Str, DevTreeError> {
+        match self.get_string(offset, true) {
+            // Note, unwrap invariant is safe.
+            // get_string returns Some(s) when second opt is true
+            Ok((_, s)) => Ok(s.unwrap()),
             Err(e) => Err(e),
         }
     }
@@ -229,7 +245,7 @@ impl<'a> DevTreeProp<'a> {
 
     /// # Safety
     /// TODO
-    pub unsafe fn get_strlist(&'a self, list: &mut [&'a str]) -> Result<usize, DevTreeError> {
+    pub unsafe fn get_strlist(&'a self, list: &mut [Option<&'a Str>]) -> Result<usize, DevTreeError> {
         self.iter_str_list(Some(list))
     }
 
@@ -241,11 +257,7 @@ impl<'a> DevTreeProp<'a> {
 
     /// # Safety
     /// TODO
-    unsafe fn get_string(
-        &'a self,
-        offset: usize,
-        opt_str: Option<&mut &'a str>,
-    ) -> Result<usize, DevTreeError> {
+    unsafe fn get_string( &'a self, offset: usize, parse: bool) -> Result<(usize, Option<&'a Str>), DevTreeError> {
         match self.propbuf.read_bstring0(offset) {
             Ok(res_u8) => {
                 if res_u8.is_empty() {
@@ -255,15 +267,15 @@ impl<'a> DevTreeProp<'a> {
                 // Include null byte
                 let len = res_u8.len() + 1;
 
-                match opt_str {
-                    Some(s) => match str::from_utf8(res_u8) {
-                        Ok(parsed_s) => {
-                            *s = parsed_s;
-                            Ok(len)
+                if parse {
+                    match bytes_as_str(res_u8) {
+                        Ok(s) => {
+                            Ok((len, Some(s)))
                         }
                         Err(e) => Err(e.into()),
-                    },
-                    None => Ok(len),
+                    }
+                } else {
+                    Ok((len, None))
                 }
             }
             Err(e) => Err(e.into()),
@@ -274,26 +286,22 @@ impl<'a> DevTreeProp<'a> {
     /// TODO
     unsafe fn iter_str_list(
         &'a self,
-        mut list_opt: Option<&mut [&'a str]>,
+        mut list_opt: Option<&mut [Option<&'a Str>]>,
     ) -> Result<usize, DevTreeError> {
-        let mut _s = "";
         let mut offset = 0;
         for count in 0.. {
             if offset == self.length() {
                 return Ok(count);
             }
 
-            let s = match &mut list_opt {
-                Some(list) => {
-                    if list.len() > count {
-                        Some(&mut list[count])
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+            let (len, s) = self.get_string(offset, list_opt.is_some())?;
+            offset += len;
+
+            if let Some(list) = list_opt.as_deref_mut() {
+                // Note, unwrap invariant is safe.
+                // get_string returns Some(s) if list_opt is Some(list)
+                (*list)[count] = Some(s.unwrap());
             };
-            offset += self.get_string(offset, s)?;
         }
         // For some reason infinite for loops need unreachable.
         unreachable!();
@@ -305,6 +313,7 @@ mod tests {
     use core::mem::size_of;
     use std::fs::File;
     use std::io::Read;
+    use crate::Str;
 
     #[test]
     fn reserved_entries_iter() {
@@ -344,8 +353,6 @@ mod tests {
         let mut file = File::open("test/riscv64-virt.dtb").unwrap();
         let mut vec: Vec<u8> = Vec::new();
 
-        let dummy = "";
-
         let _ = file.read_to_end(&mut vec).unwrap();
 
         unsafe {
@@ -363,13 +370,13 @@ mod tests {
                             if i.unwrap() == 0 {
                                 break;
                             }
-                            let mut vec: Vec<&str> = vec![&dummy; i.unwrap()];
+                            let mut vec: Vec<Option<&Str>> = vec![None; i.unwrap()];
                             prop.get_strlist(&mut vec).unwrap();
-                            for s in vec {
+
+                            let mut iter = vec.iter();
+
+                            while let Some(Some(s)) = iter.next() {
                                 print!("\t\t{} ", s);
-                                if s == dummy {
-                                    break;
-                                }
                             }
                             println!();
                         }
