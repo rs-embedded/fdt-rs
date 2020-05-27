@@ -105,55 +105,68 @@ pub struct DevTree<'a> {
     buf: &'a [u8],
 }
 
-/// Using the provided byte slice:
-/// 1. Verify that the slice begins with the magic Device Tree header
-/// 2. Return the total size field of the DeviceTree header.
-///
-/// This method should be used to provide an exact sized byte slice to the DevTree
-/// constructor: `DevTree::new()`
-///
-///
-/// # Safety
-///
-/// To garuntee safety callers of this method must:
-///
-/// - Pass a buffer which is 32-bit aligned.
-/// - Only pass a buffer which
-///
-/// Retrieve the size of the device tree without providing a sized header.
-///
-/// A buffer of MIN_HEADER_SIZE is required.
-#[inline]
-#[must_use]
-pub unsafe fn read_totalsize(buf: &[u8]) -> Result<usize, DevTreeError> {
-    println!("{}",buf.as_ptr() as usize );
-    assert!(
-        verify_offset_aligned::<u32>(buf.as_ptr() as usize).is_ok(),
-        "Unaligned buffer provided"
-    );
-    verify_magic(buf)?;
-    Ok(get_be32_field!(totalsize, fdt_header, buf)? as usize)
-}
-
-#[inline]
-#[must_use]
-unsafe fn verify_magic(buf: &[u8]) -> Result<(), DevTreeError> {
-    if get_be32_field!(magic, fdt_header, buf)? != FDT_MAGIC {
-        Err(DevTreeError::InvalidMagicNumber)
-    } else {
-        Ok(())
-    }
-}
-
 impl<'a> DevTree<'a> {
     pub const MIN_HEADER_SIZE: usize = size_of::<fdt_header>();
 
-    /// # Safety
-    /// TODO
     #[inline]
-    #[must_use]
+    unsafe fn verify_magic(buf: &[u8]) -> Result<(), DevTreeError> {
+        if get_be32_field!(magic, fdt_header, buf)? != FDT_MAGIC {
+            Err(DevTreeError::InvalidMagicNumber)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Using the provided byte slice this method will:
+    ///
+    /// 1. Verify that the slice begins with the magic Device Tree header
+    /// 2. Return the reported `totalsize` field of the DeviceTree header
+    ///
+    /// When one must parse a Flattened Device Tree, it's possible that the actual size of the device
+    /// tree may be unknown. For that reason, this method can be called before constructing the
+    /// [`DevTree`].
+    ///
+    /// Once known, the user should resize the raw byte slice to this function's return value and
+    /// pass that slice to [`DevTree::new()`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let size = DevTree::read_totalsize(buf).unwrap();
+    /// let buf = buf[..size];
+    /// DevTree::read_totalsize(bu).unwrap();
+    /// ```
+    ///
+    /// # Safety
+    ///
+    /// Callers of this method the must guarantee the following:
+    /// - The passed buffer is 32-bit aligned.
+    /// - The passed buffer is of at least [`DevTree::MIN_HEADER_SIZE`] bytes in length
+    ///
+    /// The passed byte buffer will be interpreted as a Flattened Device Tree. For this reason this API
+    /// is marked unsafe.
+    #[inline]
+    pub unsafe fn read_totalsize(buf: &[u8]) -> Result<usize, DevTreeError> {
+        assert!(
+            verify_offset_aligned::<u32>(buf.as_ptr() as usize).is_ok(),
+            "Unaligned buffer provided"
+        );
+        Self::verify_magic(buf)?;
+        Ok(get_be32_field!(totalsize, fdt_header, buf)? as usize)
+    }
+
+    /// Construct the parseable DevTree object from the provided byte slice.
+    ///
+    /// # Safety
+    ///
+    /// Callers of this method the must guarantee the following:
+    /// - The passed buffer is 32-bit aligned.
+    /// - The passed buffer is exactly the length returned by `Self::read_totalsize()`
+    ///
+    ///
+    #[inline]
     pub unsafe fn new(buf: &'a [u8]) -> Result<Self, DevTreeError> {
-        if read_totalsize(buf)? < buf.len() {
+        if Self::read_totalsize(buf)? < buf.len() {
             Err(DevTreeError::ParseError)
         } else {
             let ret = Self { buf };
@@ -164,32 +177,43 @@ impl<'a> DevTree<'a> {
         }
     }
 
+    /// Returns the totalsize field of the Device Tree
     #[inline]
     #[must_use]
     pub fn totalsize(&self) -> usize {
         unsafe { get_be32_field!(totalsize, fdt_header, self.buf).unwrap() as usize }
     }
 
+    /// Returns the of rsvmap offset field of the Device Tree
     #[inline]
     #[must_use]
     pub fn off_mem_rsvmap(&self) -> usize {
         unsafe { get_be32_field!(off_mem_rsvmap, fdt_header, self.buf).unwrap() as usize }
     }
 
+    /// Returns the of dt_struct offset field of the Device Tree
     #[inline]
     #[must_use]
     pub fn off_dt_struct(&self) -> usize {
         unsafe { get_be32_field!(off_dt_struct, fdt_header, self.buf).unwrap() as usize }
     }
 
+    /// Returns the of dt_strings offset field of the Device Tree
     #[inline]
     #[must_use]
     pub fn off_dt_strings(&self) -> usize {
         unsafe { get_be32_field!(off_dt_strings, fdt_header, self.buf).unwrap() as usize }
     }
 
+    /// Returns a typed `*const T` to the given offset in the Device Tree buffer.
+    ///
     /// # Safety
-    /// TODO
+    ///
+    /// Due to the unsafe nature of re-interpretation casts this method is unsafe.  This method
+    /// will verify that enough space to fit type T remains within the buffer.
+    ///
+    /// The caller must verify that the pointer is not misaligned before it is dereferenced.
+    #[inline]
     unsafe fn ptr_at<T>(&self, offset: usize) -> Result<*const T, DevTreeError> {
         if offset + size_of::<T>() > self.buf.len() {
             Err(DevTreeError::InvalidOffset)
@@ -198,79 +222,121 @@ impl<'a> DevTree<'a> {
         }
     }
 
-    /// An iterator over the Dev Tree "5.3 Memory Reservation Blocks"
+    /// Returns an iterator over the Dev Tree "5.3 Memory Reservation Blocks"
     #[inline]
     #[must_use]
     pub fn reserved_entries(&self) -> iters::DevTreeReserveEntryIter {
         iters::DevTreeReserveEntryIter::new(self)
     }
 
-    /// An iterator over the Dev Tree "5.3 Memory Reservation Blocks"
+    /// Returns an iterator over [`DevTreeNode`] objects
     #[inline]
     #[must_use]
     pub fn nodes(&self) -> iters::DevTreeNodeIter {
         iters::DevTreeNodeIter::new(self)
     }
-
-    pub fn parse(_offset: &mut usize) {}
 }
 
+/// A handle to a Device Tree Node within the device tree.
 pub struct DevTreeNode<'a> {
-    pub name: Result<&'a Str, DevTreeError>,
-    inner_iter: iters::DevTreeParseIter<'a>,
+    name: Result<&'a Str, DevTreeError>,
+    parse_iter: iters::DevTreeParseIter<'a>,
 }
 
 impl<'a> DevTreeNode<'a> {
-    fn new(name: Result<&'a Str, DevTreeError>, inner_iter: iters::DevTreeParseIter<'a>) -> Self {
-        Self { name, inner_iter }
+    fn new(name: Result<&'a Str, DevTreeError>, parse_iter: iters::DevTreeParseIter<'a>) -> Self {
+        Self { name, parse_iter }
     }
 
+    /// Returns the name of the `DevTreeNode` (including unit address tag)
+    #[inline]
+    #[must_use]
+    pub fn name(&'a self) -> Result<&'a Str, DevTreeError> {
+        self.name
+    }
+
+    /// Returns an iterator over this node's children [`DevTreeProp`]
+    #[inline]
+    #[must_use]
     pub fn props(&'a self) -> iters::DevTreeNodePropIter<'a> {
         iters::DevTreeNodePropIter::new(self)
     }
 }
 
+/// A handle to a [`DevTreeNode`]'s Device Tree Property
 pub struct DevTreeProp<'a> {
-    iter: iters::DevTreeParseIter<'a>,
+    parse_iter: iters::DevTreeParseIter<'a>,
     propbuf: &'a [u8],
     nameoff: usize,
 }
 
 impl<'a> DevTreeProp<'a> {
+    /// Returns the name of the property within the device tree.
+    #[inline]
     pub fn name(&self) -> Result<&'a Str, DevTreeError> {
         self.get_prop_str()
     }
 
     fn get_prop_str(&self) -> Result<&'a Str, DevTreeError> {
         unsafe {
-            let str_offset = self.iter.fdt.off_dt_strings() + self.nameoff;
-            let name = self.iter.fdt.buf.read_bstring0(str_offset)?;
+            let str_offset = self.parse_iter.fdt.off_dt_strings() + self.nameoff;
+            let name = self.parse_iter.fdt.buf.read_bstring0(str_offset)?;
             Ok(bytes_as_str(name)?)
         }
     }
 
+    /// Returns the length of the property value within the device tree
+    #[inline]
+    #[must_use]
     pub fn length(&self) -> usize {
         self.propbuf.len()
     }
 
+    /// Read a big-endian [`u32`] from the provided offset in this device tree property's value.
+    /// Convert the read value into the machines' native [`u32`] format and return it.
+    ///
+    /// If an offset which would cause this read to access memory outside of this property's value
+    /// an [`Err`] containing [`DevTreeError::InvalidOffset`] will be returned.
+    ///
     /// # Safety
-    /// TODO
+    ///
+    /// Device Tree Properties are not strongly typed therefore any dereference could return
+    /// unexpected data.
+    ///
+    /// This method will access memory using [`core::ptr::read_unaligned`], therefore an unaligned
+    /// offset may be provided.
+    ///
+    /// This method will *not* panic.
+    #[inline]
     pub unsafe fn get_u32(&self, offset: usize) -> Result<u32, DevTreeError> {
         self.propbuf
             .read_be_u32(offset)
             .or(Err(DevTreeError::InvalidOffset))
     }
 
+    /// Read a big-endian [`u64`] from the provided offset in this device tree property's value.
+    /// Convert the read value into the machines' native [`u64`] format and return it.
+    ///
+    /// If an offset which would cause this read to access memory outside of this property's value
+    /// an [`Err`] containing [`DevTreeError::InvalidOffset`] will be returned.
+    ///
     /// # Safety
-    /// TODO
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
+    #[inline]
     pub unsafe fn get_u64(&self, offset: usize) -> Result<u64, DevTreeError> {
         self.propbuf
             .read_be_u64(offset)
             .or(Err(DevTreeError::InvalidOffset))
     }
 
+    /// A Phandle is simply defined as a u32 value, as such this method performs the same action as
+    /// [`self.get_u32`]
+    ///
     /// # Safety
-    /// TODO
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
+    #[inline]
     pub unsafe fn get_phandle(&self, offset: usize) -> Result<Phandle, DevTreeError> {
         self.propbuf
             .read_be_u32(offset)
@@ -278,7 +344,9 @@ impl<'a> DevTreeProp<'a> {
     }
 
     /// # Safety
-    /// TODO
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
+    #[inline]
     pub unsafe fn get_str(&'a self, offset: usize) -> Result<&'a Str, DevTreeError> {
         match self.get_string(offset, true) {
             // Note, unwrap invariant is safe.
@@ -289,13 +357,17 @@ impl<'a> DevTreeProp<'a> {
     }
 
     /// # Safety
-    /// TODO
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
+    #[inline]
     pub unsafe fn get_str_count(&self) -> Result<usize, DevTreeError> {
         self.iter_str_list(None)
     }
 
     /// # Safety
-    /// TODO
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
+    #[inline]
     pub unsafe fn get_strlist(
         &'a self,
         list: &mut [Option<&'a Str>],
@@ -304,13 +376,16 @@ impl<'a> DevTreeProp<'a> {
     }
 
     /// # Safety
-    /// TODO
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
+    #[inline]
     pub unsafe fn get_raw(&self) -> &'a [u8] {
         self.propbuf
     }
 
     /// # Safety
-    /// TODO
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
     unsafe fn get_string(
         &'a self,
         offset: usize,
@@ -339,7 +414,8 @@ impl<'a> DevTreeProp<'a> {
     }
 
     /// # Safety
-    /// TODO
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
     unsafe fn iter_str_list(
         &'a self,
         mut list_opt: Option<&mut [Option<&'a Str>]>,
@@ -368,16 +444,16 @@ impl<'a> DevTreeProp<'a> {
 mod tests {
     use crate::Str;
     use core::mem::size_of;
-    use std::fs::{File, metadata};
+    use std::fs::{metadata, File};
     use std::io::Read;
 
     unsafe fn read_dtb() -> (Vec<u8>, &'static mut [u8]) {
         let mut file = File::open("test/riscv64-virt.dtb").unwrap();
         let len = metadata("test/riscv64-virt.dtb").unwrap().len() as usize;
-        let mut vec: Vec<u8> = vec![0u8; len + size_of::<u32>()*2];
+        let mut vec: Vec<u8> = vec![0u8; len + size_of::<u32>() * 2];
 
-        let (_, mut buf, _)  = vec.align_to_mut::<u32>();
-        let mut p = buf.as_mut_ptr();
+        let (_, buf, _) = vec.align_to_mut::<u32>();
+        let p = buf.as_mut_ptr();
         let mut buf = std::slice::from_raw_parts_mut(p as *mut u8, len);
 
         file.read_exact(&mut buf).unwrap();
@@ -385,9 +461,20 @@ mod tests {
     }
 
     #[test]
+    fn test_readsize_advice() {
+        unsafe {
+            let (vec, buf) = read_dtb();
+            let size = crate::DevTree::read_totalsize(&buf).unwrap();
+            let buf = &buf[..size];
+            let _blob = crate::DevTree::new(buf).unwrap();
+            std::mem::drop(vec);
+        }
+    }
+
+    #[test]
     fn reserved_entries_iter() {
         unsafe {
-            let (vec, buf) =  read_dtb();
+            let (vec, buf) = read_dtb();
             let blob = crate::DevTree::new(buf).unwrap();
             assert!(blob.reserved_entries().count() == 0);
             std::mem::drop(vec);
@@ -397,7 +484,7 @@ mod tests {
     #[test]
     fn nodes_iter() {
         unsafe {
-            let (vec, buf) =  read_dtb();
+            let (vec, buf) = read_dtb();
             let blob = crate::DevTree::new(buf).unwrap();
             for node in blob.nodes() {
                 println!("{}", node.name.unwrap());
@@ -410,7 +497,7 @@ mod tests {
     #[test]
     fn node_prop_iter() {
         unsafe {
-            let (vec, buf) =  read_dtb();
+            let (vec, buf) = read_dtb();
             let blob = crate::DevTree::new(buf).unwrap();
             for node in blob.nodes() {
                 println!("{}", node.name.unwrap());
@@ -438,8 +525,8 @@ mod tests {
                     }
                 }
             }
-        // Wait until the end to drop in since we alias the address.
-        std::mem::drop(vec);
+            // Wait until the end to drop in since we alias the address.
+            std::mem::drop(vec);
         }
     }
 }

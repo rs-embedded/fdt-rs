@@ -17,25 +17,25 @@ pub trait SliceRead {
 }
 
 macro_rules! unchecked_be_read {
-    ( $buf:ident, $type:ident , $off:expr ) => {(
-        if $off + size_of::<$type>() > $buf.len() {
+    ( $buf:ident, $type:ident , $off:expr ) => {
+        (if $off + size_of::<$type>() > $buf.len() {
             Err(SliceReadError::UnexpectedEndOfInput)
         } else {
             Ok((*($buf.as_ptr().add($off) as *const $type)).to_be())
-        }
-    )}
+        })
+    };
 }
 
 macro_rules! be_read {
-    ( $buf:ident, $type:ident , $off:expr ) => {(
-        if $off + size_of::<$type>() > $buf.len() {
+    ( $buf:ident, $type:ident , $off:expr ) => {
+        (if $off + size_of::<$type>() > $buf.len() {
             Err(SliceReadError::UnexpectedEndOfInput)
         } else {
             // We explicitly read unaligned.
             #[allow(clippy::cast_ptr_alignment)]
             Ok((read_unaligned::<$type>($buf.as_ptr().add($off) as *const $type)).to_be())
-        }
-    )}
+        })
+    };
 }
 
 impl<'a> SliceRead for &'a [u8] {

@@ -2,10 +2,10 @@ use core::mem::size_of;
 
 use num_traits::FromPrimitive;
 
-use crate::{Str, bytes_as_str};
-use super::buf_util::{SliceRead};
-use super::{DevTree, DevTreeNode, DevTreeProp, DevTreeError};
-use super::spec::{FdtTok, fdt_prop_header, fdt_reserve_entry};
+use super::buf_util::SliceRead;
+use super::spec::{fdt_prop_header, fdt_reserve_entry, FdtTok};
+use super::{DevTree, DevTreeError, DevTreeNode, DevTreeProp};
+use crate::{bytes_as_str, Str};
 
 #[derive(Clone, Debug)]
 pub struct DevTreeReserveEntryIter<'a> {
@@ -21,10 +21,14 @@ impl<'a> DevTreeReserveEntryIter<'a> {
         }
     }
 
-    fn read(&self) -> Result<&'a fdt_reserve_entry, DevTreeError> {
-        unsafe {
-            Ok(&*self.fdt.ptr_at(self.offset)?)
-        }
+    /// Return the current offset as a fdt_reserve_entry reference.
+    ///
+    /// # Safety
+    ///
+    /// The caller must verify that the current offset of this iterator is 32-bit aligned.
+    /// (Each field is 32-bit aligned and they may be read individually.)
+    unsafe fn read(&self) -> Result<&'a fdt_reserve_entry, DevTreeError> {
+        Ok(&*self.fdt.ptr_at(self.offset)?)
     }
 }
 
@@ -34,11 +38,14 @@ impl<'a> Iterator for DevTreeReserveEntryIter<'a> {
         if self.offset > self.fdt.totalsize() {
             None
         } else {
-            let ret = self.read().unwrap();
+            // We guaruntee the read will be aligned to 32 bytes because:
+            // - We construct with guarunteed 32-bit aligned offset
+            // - We always increment by an aligned amount
+            let ret = unsafe { self.read().unwrap() };
+
             if ret.address == 0.into() && ret.size == 0.into() {
                 return None;
             }
-
             self.offset += size_of::<fdt_reserve_entry>();
             Some(ret)
         }
@@ -136,7 +143,7 @@ pub struct DevTreeNodePropIter<'a> {
 impl<'a> DevTreeNodePropIter<'a> {
     pub(crate) fn new(node: &'a DevTreeNode) -> Self {
         Self {
-            parse_iter: node.inner_iter,
+            parse_iter: node.parse_iter,
         }
     }
 }
@@ -147,7 +154,7 @@ impl<'a> Iterator for DevTreeNodePropIter<'a> {
         let this = self.parse_iter;
         match self.parse_iter.next() {
             Some(ParsedItem::Prop(p)) => Some(Self::Item {
-                iter: this,
+                parse_iter: this,
                 nameoff: p.nameoff as usize,
                 propbuf: p.propbuf,
             }),
@@ -164,7 +171,7 @@ fn next_devtree_token<'a>(
 ) -> Result<Option<ParsedItem<'a>>, DevTreeError> {
     unsafe {
         loop {
-            // Verify alignment. 
+            // Verify alignment.
             assert!(offset % size_of::<u32>() == 0);
 
             // The size will be checked when reads are performed.
@@ -192,7 +199,7 @@ fn next_devtree_token<'a>(
                     let prop_len = u32::from((*header).len) as usize;
 
                     offset += size_of::<fdt_prop_header>();
-                    let propbuf = &fdt.buf[offset..offset+prop_len];
+                    let propbuf = &fdt.buf[offset..offset + prop_len];
                     offset += propbuf.len();
 
                     // Align back to u32.
@@ -205,9 +212,7 @@ fn next_devtree_token<'a>(
                 }
                 Some(FdtTok::EndNode) => {}
                 Some(FdtTok::Nop) => {}
-                Some(FdtTok::End) => {
-                    return Ok(None)
-                }
+                Some(FdtTok::End) => return Ok(None),
                 None => {
                     // Invalid token
                     return Err(DevTreeError::ParseError);
