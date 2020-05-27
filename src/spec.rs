@@ -2,6 +2,9 @@ use endian_type::types::{u32_be, u64_be};
 use num_derive::FromPrimitive;
 
 pub const FDT_MAGIC: u32 = 0xd00d_feed;
+
+pub type Phandle = u32;
+
 #[derive(FromPrimitive)]
 pub enum FdtTok {
     BeginNode = 0x1,

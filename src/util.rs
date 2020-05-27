@@ -2,11 +2,6 @@ use core::mem::size_of;
 use core::ptr::read_unaligned;
 pub use core::{convert, fmt, option, result};
 
-#[inline]
-pub fn align(val: usize, to: usize) -> usize {
-    val + (to - (val % to)) % to
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum SliceReadError {
     UnexpectedEndOfInput,
@@ -18,10 +13,10 @@ pub trait SliceRead {
     fn read_be_u32(&self, pos: usize) -> SliceReadResult<u32>;
     fn read_be_u64(&self, pos: usize) -> SliceReadResult<u64>;
     fn read_bstring0(&self, pos: usize) -> SliceReadResult<&[u8]>;
-    fn subslice(&self, start: usize, len: usize) -> SliceReadResult<&[u8]>;
 }
 
 impl<'a> SliceRead for &'a [u8] {
+    #[inline]
     fn read_be_u32(&self, pos: usize) -> SliceReadResult<u32> {
         // check size is valid
         if pos + size_of::<u32>() > self.len() {
@@ -35,6 +30,7 @@ impl<'a> SliceRead for &'a [u8] {
         }
     }
 
+    #[inline]
     fn read_be_u64(&self, pos: usize) -> SliceReadResult<u64> {
         // check size is valid
         if pos + size_of::<u64>() > self.len() {
@@ -48,6 +44,7 @@ impl<'a> SliceRead for &'a [u8] {
         }
     }
 
+    #[inline]
     fn read_bstring0(&self, pos: usize) -> SliceReadResult<&[u8]> {
         let mut cur = pos;
         while cur < self.len() {
@@ -58,13 +55,5 @@ impl<'a> SliceRead for &'a [u8] {
         }
 
         Err(SliceReadError::UnexpectedEndOfInput)
-    }
-
-    fn subslice(&self, start: usize, end: usize) -> SliceReadResult<&[u8]> {
-        if !end < self.len() {
-            return Err(SliceReadError::UnexpectedEndOfInput);
-        }
-
-        Ok(&self[start..end])
     }
 }

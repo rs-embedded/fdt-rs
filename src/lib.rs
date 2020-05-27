@@ -22,9 +22,8 @@ use core::mem::size_of;
 
 use num_traits::FromPrimitive;
 
-pub mod iters;
+mod iters;
 pub mod spec;
-
 use spec::*;
 
 macro_rules! get_be32_field {
@@ -41,6 +40,7 @@ pub enum DevTreeError {
     /// The magic number FDT_MAGIC was not found at the start of the
     /// structure.
     InvalidMagicNumber,
+
     /// TODO
     InvalidLength,
     /// Failed to read data from slice.
@@ -51,7 +51,7 @@ pub enum DevTreeError {
 
     /// While trying to convert a string that was supposed to be ASCII, invalid
     /// utf8 sequences were encounted
-    Utf8Error,
+    Utf8Error(core::str::Utf8Error),
 
     /// The device tree version is not supported by this library.
     VersionNotSupported,
@@ -61,6 +61,12 @@ pub enum DevTreeError {
 impl From<SliceReadError> for DevTreeError {
     fn from(e: SliceReadError) -> DevTreeError {
         DevTreeError::SliceReadError(e)
+    }
+}
+
+impl From<core::str::Utf8Error> for DevTreeError {
+    fn from(e: core::str::Utf8Error) -> DevTreeError {
+        DevTreeError::Utf8Error(e)
     }
 }
 
@@ -169,7 +175,7 @@ impl<'a> DevTreeProp<'a> {
     fn get_prop_str(&self) -> Result<&'a str, DevTreeError> {
         let str_offset = self.iter.fdt.off_dt_strings() + self.nameoff;
         let name = self.iter.fdt.buf.read_bstring0(str_offset)?;
-        core::str::from_utf8(name).or(Err(DevTreeError::Utf8Error))
+        Ok(core::str::from_utf8(name)?)
     }
 
     pub fn length(&self) -> usize {
@@ -255,7 +261,7 @@ impl<'a> DevTreeProp<'a> {
                             *s = parsed_s;
                             Ok(len)
                         }
-                        Err(_) => Err(DevTreeError::Utf8Error),
+                        Err(e) => Err(e.into()),
                     },
                     None => Ok(len),
                 }

@@ -179,7 +179,7 @@ fn step_parse_device_tree<'a>(
                     offset += fdt.buf.as_ptr().add(offset).align_offset(size_of::<u32>());
 
                     return Ok(ParsedItem::Node(ParsedNode {
-                        name: core::str::from_utf8(name).or(Err(DevTreeError::Utf8Error)),
+                        name: core::str::from_utf8(name).map_err(|e| e.into()),
                         new_offset: offset,
                     }));
                 }
