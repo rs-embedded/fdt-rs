@@ -5,8 +5,6 @@
 #![allow(clippy::as_conversions)]
 #![allow(clippy::print_stdout)]
 #![allow(clippy::implicit_return)]
-
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
 extern crate core;
@@ -16,14 +14,14 @@ extern crate endian_type;
 #[macro_use]
 extern crate memoffset;
 
-pub mod spec;
-mod iters;
 mod buf_util;
+mod iters;
+pub mod spec;
 
+use buf_util::{SliceRead, SliceReadError};
 use core::convert::From;
 use core::mem::size_of;
-use buf_util::{SliceRead, SliceReadError};
-use spec::{Phandle, fdt_header, FDT_MAGIC};
+use spec::{fdt_header, Phandle, FDT_MAGIC};
 
 cfg_if! {
     if #[cfg(feature = "ascii")] {
@@ -50,6 +48,17 @@ macro_rules! get_be32_field {
     };
 }
 
+#[inline]
+const fn is_aligned<T>(offset: usize) -> bool {
+    offset % size_of::<T>() == 0
+}
+
+#[inline]
+const fn verify_offset_aligned<T>(offset: usize) -> Result<usize, DevTreeError> {
+    let i: [Result<usize, DevTreeError>; 2] = [Err(DevTreeError::ParseError), Ok(offset)];
+    i[is_aligned::<T>(offset) as usize]
+}
+
 /// An error describe parsing problems when creating device trees.
 #[derive(Debug, Clone, Copy)]
 pub enum DevTreeError {
@@ -57,14 +66,15 @@ pub enum DevTreeError {
     /// structure.
     InvalidMagicNumber,
 
-    /// Unable to safely read data from the given device tree using the supplied offset 
+    /// Unable to safely read data from the given device tree using the supplied offset
     InvalidOffset,
 
-    /// The data format was not as expected at the given buffer offset
+    /// The data was not formatted as expected.  This likely indicates an error in the Device Tree
+    /// we're parsing.
     ParseError,
 
     /// While trying to convert a string that was supposed to be ASCII, invalid
-    /// `Str` sequences were encounter. 
+    /// `Str` sequences were encounter.
     ///
     /// Note, the underlying type will differ based on use of the `ascii` feature.
     StrError(StrError),
@@ -86,22 +96,47 @@ impl From<StrError> for DevTreeError {
     }
 }
 
+/// A parseable Flattened Device Tree.
+///
+/// This parser was written according to the v0.3 specification provided at
+/// https://www.devicetree.org/
 #[derive(Copy, Clone, Debug)]
 pub struct DevTree<'a> {
     buf: &'a [u8],
 }
 
+/// Using the provided byte slice:
+/// 1. Verify that the slice begins with the magic Device Tree header
+/// 2. Return the total size field of the DeviceTree header.
+///
+/// This method should be used to provide an exact sized byte slice to the DevTree
+/// constructor: `DevTree::new()`
+///
+///
 /// # Safety
-/// TODO
+///
+/// To garuntee safety callers of this method must:
+///
+/// - Pass a buffer which is 32-bit aligned.
+/// - Only pass a buffer which
+///
 /// Retrieve the size of the device tree without providing a sized header.
 ///
 /// A buffer of MIN_HEADER_SIZE is required.
 #[inline]
+#[must_use]
 pub unsafe fn read_totalsize(buf: &[u8]) -> Result<usize, DevTreeError> {
+    println!("{}",buf.as_ptr() as usize );
+    assert!(
+        verify_offset_aligned::<u32>(buf.as_ptr() as usize).is_ok(),
+        "Unaligned buffer provided"
+    );
     verify_magic(buf)?;
     Ok(get_be32_field!(totalsize, fdt_header, buf)? as usize)
 }
 
+#[inline]
+#[must_use]
 unsafe fn verify_magic(buf: &[u8]) -> Result<(), DevTreeError> {
     if get_be32_field!(magic, fdt_header, buf)? != FDT_MAGIC {
         Err(DevTreeError::InvalidMagicNumber)
@@ -115,37 +150,42 @@ impl<'a> DevTree<'a> {
 
     /// # Safety
     /// TODO
+    #[inline]
+    #[must_use]
     pub unsafe fn new(buf: &'a [u8]) -> Result<Self, DevTreeError> {
         if read_totalsize(buf)? < buf.len() {
             Err(DevTreeError::ParseError)
         } else {
-            Ok(Self { buf })
+            let ret = Self { buf };
+            // Verify required alignment before returning.
+            verify_offset_aligned::<u32>(ret.off_mem_rsvmap())?;
+            verify_offset_aligned::<u32>(ret.off_dt_struct())?;
+            Ok(ret)
         }
     }
 
-    fn totalsize(&self) -> usize {
-        unsafe {
-            get_be32_field!(totalsize, fdt_header, self.buf).unwrap() as usize
-        }
+    #[inline]
+    #[must_use]
+    pub fn totalsize(&self) -> usize {
+        unsafe { get_be32_field!(totalsize, fdt_header, self.buf).unwrap() as usize }
     }
 
-    fn off_mem_rsvmap(&self) -> usize {
-        unsafe {
-            get_be32_field!(off_mem_rsvmap, fdt_header, self.buf).unwrap() as usize
-        }
+    #[inline]
+    #[must_use]
+    pub fn off_mem_rsvmap(&self) -> usize {
+        unsafe { get_be32_field!(off_mem_rsvmap, fdt_header, self.buf).unwrap() as usize }
     }
 
-    fn off_dt_struct(&self) -> usize {
-        unsafe {
-            get_be32_field!(off_dt_struct, fdt_header, self.buf).unwrap() as usize
-        }
+    #[inline]
+    #[must_use]
+    pub fn off_dt_struct(&self) -> usize {
+        unsafe { get_be32_field!(off_dt_struct, fdt_header, self.buf).unwrap() as usize }
     }
 
-    #[allow(dead_code)]
-    fn off_dt_strings(&self) -> usize {
-        unsafe {
-            get_be32_field!(off_dt_strings, fdt_header, self.buf).unwrap() as usize
-        }
+    #[inline]
+    #[must_use]
+    pub fn off_dt_strings(&self) -> usize {
+        unsafe { get_be32_field!(off_dt_strings, fdt_header, self.buf).unwrap() as usize }
     }
 
     /// # Safety
@@ -256,7 +296,10 @@ impl<'a> DevTreeProp<'a> {
 
     /// # Safety
     /// TODO
-    pub unsafe fn get_strlist(&'a self, list: &mut [Option<&'a Str>]) -> Result<usize, DevTreeError> {
+    pub unsafe fn get_strlist(
+        &'a self,
+        list: &mut [Option<&'a Str>],
+    ) -> Result<usize, DevTreeError> {
         self.iter_str_list(Some(list))
     }
 
@@ -268,7 +311,11 @@ impl<'a> DevTreeProp<'a> {
 
     /// # Safety
     /// TODO
-    unsafe fn get_string( &'a self, offset: usize, parse: bool) -> Result<(usize, Option<&'a Str>), DevTreeError> {
+    unsafe fn get_string(
+        &'a self,
+        offset: usize,
+        parse: bool,
+    ) -> Result<(usize, Option<&'a Str>), DevTreeError> {
         match self.propbuf.read_bstring0(offset) {
             Ok(res_u8) => {
                 if res_u8.is_empty() {
@@ -280,9 +327,7 @@ impl<'a> DevTreeProp<'a> {
 
                 if parse {
                     match bytes_as_str(res_u8) {
-                        Ok(s) => {
-                            Ok((len, Some(s)))
-                        }
+                        Ok(s) => Ok((len, Some(s))),
                         Err(e) => Err(e.into()),
                     }
                 } else {
@@ -321,53 +366,52 @@ impl<'a> DevTreeProp<'a> {
 
 #[cfg(test)]
 mod tests {
-    use core::mem::size_of;
-    use std::fs::File;
-    use std::io::Read;
     use crate::Str;
+    use core::mem::size_of;
+    use std::fs::{File, metadata};
+    use std::io::Read;
+
+    unsafe fn read_dtb() -> (Vec<u8>, &'static mut [u8]) {
+        let mut file = File::open("test/riscv64-virt.dtb").unwrap();
+        let len = metadata("test/riscv64-virt.dtb").unwrap().len() as usize;
+        let mut vec: Vec<u8> = vec![0u8; len + size_of::<u32>()*2];
+
+        let (_, mut buf, _)  = vec.align_to_mut::<u32>();
+        let mut p = buf.as_mut_ptr();
+        let mut buf = std::slice::from_raw_parts_mut(p as *mut u8, len);
+
+        file.read_exact(&mut buf).unwrap();
+        (vec, buf)
+    }
 
     #[test]
     fn reserved_entries_iter() {
-        let mut file = File::open("test/riscv64-virt.dtb").unwrap();
-        let mut vec: Vec<u8> = Vec::new();
-        let _ = file.read_to_end(&mut vec).unwrap();
-
         unsafe {
-            let blob = crate::DevTree::new(vec.as_slice()).unwrap();
+            let (vec, buf) =  read_dtb();
+            let blob = crate::DevTree::new(buf).unwrap();
             assert!(blob.reserved_entries().count() == 0);
+            std::mem::drop(vec);
         }
-
-        // Wait until the end to drop in since we alias the address.
-        std::mem::drop(vec);
     }
 
     #[test]
     fn nodes_iter() {
-        let mut file = File::open("test/riscv64-virt.dtb").unwrap();
-        let mut vec: Vec<u8> = Vec::new();
-        let _ = file.read_to_end(&mut vec).unwrap();
-
         unsafe {
-            let blob = crate::DevTree::new(vec.as_slice()).unwrap();
+            let (vec, buf) =  read_dtb();
+            let blob = crate::DevTree::new(buf).unwrap();
             for node in blob.nodes() {
                 println!("{}", node.name.unwrap());
             }
             assert!(blob.nodes().count() == 27);
+            std::mem::drop(vec);
         }
-
-        // Wait until the end to drop in since we alias the address.
-        std::mem::drop(vec);
     }
 
     #[test]
     fn node_prop_iter() {
-        let mut file = File::open("test/riscv64-virt.dtb").unwrap();
-        let mut vec: Vec<u8> = Vec::new();
-
-        let _ = file.read_to_end(&mut vec).unwrap();
-
         unsafe {
-            let blob = crate::DevTree::new(vec.as_slice()).unwrap();
+            let (vec, buf) =  read_dtb();
+            let blob = crate::DevTree::new(buf).unwrap();
             for node in blob.nodes() {
                 println!("{}", node.name.unwrap());
                 for prop in node.props() {
@@ -394,9 +438,8 @@ mod tests {
                     }
                 }
             }
-        }
-
         // Wait until the end to drop in since we alias the address.
         std::mem::drop(vec);
+        }
     }
 }

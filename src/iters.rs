@@ -166,6 +166,7 @@ fn next_devtree_token<'a>(
         loop {
             // Verify alignment. 
             assert!(offset % size_of::<u32>() == 0);
+
             // The size will be checked when reads are performed.
             // (We manage this internally so this will never fail.)
             let fdt_tok_val = fdt.buf.unsafe_read_be_u32(offset)?;
