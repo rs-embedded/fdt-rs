@@ -1,3 +1,5 @@
+//! This module provides a collection of iterative parsers of the buf provided to initialze
+//! a [`DevTree`].
 use core::mem::size_of;
 use core::num::NonZeroUsize;
 
@@ -6,7 +8,7 @@ use num_traits::FromPrimitive;
 use super::buf_util::SliceRead;
 use super::spec::{fdt_prop_header, fdt_reserve_entry, FdtTok};
 use super::{DevTree, DevTreeError, DevTreeItem, DevTreeNode, DevTreeProp};
-use crate::{bytes_as_str, Str};
+use crate::{bytes_as_str};
 
 #[derive(Clone, Debug)]
 pub struct DevTreeReserveEntryIter<'a> {
@@ -53,22 +55,8 @@ impl<'a> Iterator for DevTreeReserveEntryIter<'a> {
     }
 }
 
-pub struct ParsedNode<'a> {
-    /// Offset of the property value within the FDT buffer.
-    name: Result<&'a Str, DevTreeError>,
-}
-pub struct ParsedProp<'a> {
-    /// Offset of the property value within the FDT buffer.
-    propbuf: &'a [u8],
-    nameoff: u32,
-}
-
-pub enum ParsedItem<'a> {
-    Node(ParsedNode<'a>),
-    Prop(ParsedProp<'a>),
-}
-
-#[derive(Clone, Copy, Debug)]
+/// An iterator over all [`DevTreeItem`] objects.
+#[derive(Clone, Debug)]
 pub struct DevTreeIter<'a> {
     offset: usize,
     current_node_offset: Option<NonZeroUsize>,
@@ -94,22 +82,11 @@ impl<'a> DevTreeIter<'a> {
         }
     }
 
-    fn node_from_parse(&self, node: ParsedNode<'a>) -> DevTreeNode<'a> {
-        DevTreeNode::new(node.name, *self)
-    }
-
-    fn prop_from_parse(&self, prop: ParsedProp<'a>) -> DevTreeProp<'a> {
-        DevTreeProp {
-            parent_iter: self.current_node_itr().unwrap(),
-            nameoff: prop.nameoff as usize,
-            propbuf: prop.propbuf,
-        }
-    }
-
-    fn next_node(&mut self) -> Option<DevTreeNode<'a>> {
+    /// Returns the next [`DevTreeNode`] found in the Device Tree
+    pub fn next_node(&mut self) -> Option<DevTreeNode<'a>> {
         loop {
             match self.next() {
-                Some(ParsedItem::Node(n)) => return Some(self.node_from_parse(n)),
+                Some(DevTreeItem::Node(n)) => return Some(n),
                 Some(_) => {
                     continue;
                 }
@@ -118,40 +95,50 @@ impl<'a> DevTreeIter<'a> {
         }
     }
 
-    fn next_prop(&mut self) -> Option<DevTreeProp<'a>> {
+    /// Returns the next [`DevTreeProp`] found in the Device Tree (regardless if it occurs on
+    /// a different [`DevTreeNode`]
+    pub fn next_prop(&mut self) -> Option<DevTreeProp<'a>> {
+        loop {
+            match self.next() {
+                Some(DevTreeItem::Prop(p)) => return Some(p),
+                // Return if a new node or an EOF.
+                Some(DevTreeItem::Node(_)) => continue,
+                _ => return None,
+            }
+        }
+    }
+
+    /// Returns the next [`DevTreeProp`] on the current node within in the Device Tree
+    pub fn next_node_prop(&mut self) -> Option<DevTreeProp<'a>> {
         match self.next() {
-            Some(ParsedItem::Prop(p)) => Some(self.prop_from_parse(p)),
+            Some(DevTreeItem::Prop(p)) => Some(p),
             // Return if a new node or an EOF.
             _ => None,
         }
     }
 
-    fn next_item(&mut self) -> Option<crate::DevTreeItem<'a>> {
-        match self.next() {
-            Some(ParsedItem::Prop(p)) => Some(DevTreeItem::Prop(self.prop_from_parse(p))),
-            Some(ParsedItem::Node(n)) => Some(DevTreeItem::Node(self.node_from_parse(n))),
-            None => None,
-        }
-    }
-
+    /// See the documentation of [`DevTree::find`]
     #[inline]
     pub fn find<F>(&mut self, predicate: F) -> Option<(DevTreeItem<'a>, Self)>
     where
         F: Fn(&DevTreeItem) -> bool,
     {
-        while let Some(i) = self.next_item() {
+        while let Some(i) = self.next() {
             if predicate(&i) {
-                return Some((i, *self));
+                return Some((i, self.clone()));
             }
         }
         None
     }
 
-    fn next_devtree_token(&mut self) -> Result<Option<ParsedItem<'a>>, DevTreeError> {
+    // Inlined because higher-order interators may ignore results
+    #[inline]
+    fn next_devtree_token(&mut self) -> Result<Option<DevTreeItem<'a>>, DevTreeError> {
         unsafe {
             loop {
                 // Verify alignment.
                 assert!(self.offset % size_of::<u32>() == 0);
+                let starting_offset = self.offset;
 
                 // The size will be checked when reads are performed.
                 // (We manage this internally so this will never fail.)
@@ -161,6 +148,10 @@ impl<'a> DevTreeIter<'a> {
 
                 match fdt_tok {
                     Some(FdtTok::BeginNode) => {
+                        // Unchecked is guarunteed safe.
+                        // We're accessing past address zero of a device tree.
+                        self.current_node_offset = Some(NonZeroUsize::new_unchecked(starting_offset));
+
                         let name = self.fdt.buf.read_bstring0(self.offset)?;
 
                         // Move to the end of str (adding for null byte).
@@ -168,8 +159,9 @@ impl<'a> DevTreeIter<'a> {
                         // Per spec - align back to u32.
                         self.offset += self.fdt.buf.as_ptr().add(self.offset).align_offset(size_of::<u32>());
 
-                        return Ok(Some(ParsedItem::Node(ParsedNode {
+                        return Ok(Some(DevTreeItem::Node(DevTreeNode {
                             name: bytes_as_str(name).map_err(|e| e.into()),
+                            parse_iter: self.clone(),
                         })));
                     }
                     Some(FdtTok::Prop) => {
@@ -182,8 +174,16 @@ impl<'a> DevTreeIter<'a> {
 
                         // Align back to u32.
                         self.offset += self.fdt.buf.as_ptr().add(self.offset).align_offset(size_of::<u32>());
-                        return Ok(Some(ParsedItem::Prop(ParsedProp {
-                            nameoff: u32::from((*header).nameoff),
+
+                        // We saw a property before ever seeing a node.
+                        let parent = match self.current_node_itr() {
+                            Some(parent) => parent,
+                            None => return Err(DevTreeError::ParseError),
+                        };
+
+                        return Ok(Some(DevTreeItem::Prop( DevTreeProp {
+                            parent_iter: parent, // FIXME
+                            nameoff: u32::from((*header).nameoff) as usize,
                             propbuf,
                         })));
                     }
@@ -201,8 +201,9 @@ impl<'a> DevTreeIter<'a> {
 }
 
 impl<'a> Iterator for DevTreeIter<'a> {
-    type Item = ParsedItem<'a>;
+    type Item = DevTreeItem<'a>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let res = self.next_devtree_token();
         if let Ok(Some(res)) = res {
@@ -212,12 +213,27 @@ impl<'a> Iterator for DevTreeIter<'a> {
     }
 }
 
+/// An interator over [`DevTreeNode`] objects in the [`DevTree`]
 #[derive(Clone, Debug)]
 pub struct DevTreeNodeIter<'a>(DevTreeIter<'a>);
 
 impl<'a> DevTreeNodeIter<'a> {
     pub(crate) fn new(fdt: &'a DevTree) -> Self {
         Self(DevTreeIter::new(fdt))
+    }
+
+    /// See the documentation of [`DevTree::find_node`]
+    #[inline]
+    pub fn find<F>(&mut self, predicate: F) -> Option<(DevTreeNode<'a>, Self)>
+    where
+        F: Fn(&DevTreeNode) -> bool,
+    {
+        while let Some(i) = self.next() {
+            if predicate(&i) {
+                return Some((i, self.clone()));
+            }
+        }
+        None
     }
 }
 
@@ -228,18 +244,82 @@ impl<'a> Iterator for DevTreeNodeIter<'a> {
     }
 }
 
-pub struct DevTreeNodePropIter<'a>(DevTreeIter<'a>);
-
-impl<'a> DevTreeNodePropIter<'a> {
-    pub(crate) fn new(node: &'a DevTreeNode) -> Self {
-        Self(node.parse_iter)
+impl<'a> From<DevTreeIter<'a>> for DevTreeNodeIter<'a> {
+    fn from(iter: DevTreeIter<'a>) -> Self {
+        Self(iter)
     }
 }
 
-impl<'a> Iterator for DevTreeNodePropIter<'a> {
+/// An interator over [`DevTreeProp`] objects in the [`DevTree`]
+#[derive(Clone, Debug)]
+pub struct DevTreePropIter<'a>(DevTreeIter<'a>);
+
+impl<'a> DevTreePropIter<'a> {
+    pub(crate) fn new(fdt: &'a DevTree) -> Self {
+        Self(DevTreeIter::new(fdt))
+    }
+
+    /// See the documentation of [`DevTree::find_prop`]
+    #[inline]
+    pub fn find<F>(&mut self, predicate: F) -> Option<(DevTreeProp<'a>, Self)>
+    where
+        F: Fn(&DevTreeProp) -> bool,
+    {
+        while let Some(i) = self.next() {
+            if predicate(&i) {
+                return Some((i, self.clone()));
+            }
+        }
+        None
+    }
+}
+
+impl<'a> Iterator for DevTreePropIter<'a> {
     type Item = DevTreeProp<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next_prop()
     }
 }
 
+impl<'a> From<DevTreeIter<'a>> for DevTreePropIter<'a> {
+    fn from(iter: DevTreeIter<'a>) -> Self {
+        Self(iter)
+    }
+}
+
+/// An interator over [`DevTreeProp`] objects on a single node within the [`DevTree`]
+#[derive(Clone, Debug)]
+pub struct DevTreeNodePropIter<'a>(DevTreeIter<'a>);
+
+impl<'a> DevTreeNodePropIter<'a> {
+    pub(crate) fn new(node: &'a DevTreeNode) -> Self {
+        Self(node.parse_iter.clone())
+    }
+
+    /// See the documentation of [`DevTree::find_prop`]
+    #[inline]
+    pub fn find<F>(&mut self, predicate: F) -> Option<(DevTreeProp<'a>, Self)>
+    where
+        F: Fn(&DevTreeProp) -> bool,
+    {
+        while let Some(i) = self.next() {
+            if predicate(&i) {
+                return Some((i, self.clone()));
+            }
+        }
+        None
+    }
+}
+
+impl<'a> Iterator for DevTreeNodePropIter<'a> {
+    type Item = DevTreeProp<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next_node_prop()
+    }
+}
+
+impl<'a> From<DevTreeIter<'a>> for DevTreeNodePropIter<'a> {
+    fn from(iter: DevTreeIter<'a>) -> Self {
+        Self(iter)
+    }
+}

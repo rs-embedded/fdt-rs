@@ -1,7 +1,6 @@
 #![deny(clippy::all, clippy::cargo)]
 #![allow(clippy::as_conversions)]
-#![allow(clippy::print_stdout)]
-#![allow(clippy::implicit_return)]
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
 extern crate core;
@@ -104,9 +103,17 @@ pub struct DevTree<'a> {
 
 impl<'a> DevTree<'a> {
     pub const MIN_HEADER_SIZE: usize = size_of::<fdt_header>();
-
+    /// Verify the magic header of a Device Tree buffer
+    ///
+    /// # Safety
+    ///
+    /// Callers of this method the must guarantee the following:
+    /// - The passed buffer is 32-bit aligned.
+    ///
+    /// The passed byte buffer will be interpreted as a Flattened Device Tree. For this reason this API
+    /// is marked unsafe.
     #[inline]
-    unsafe fn verify_magic(buf: &[u8]) -> Result<(), DevTreeError> {
+    pub unsafe fn verify_magic(buf: &[u8]) -> Result<(), DevTreeError> {
         if get_be32_field!(magic, fdt_header, buf)? != FDT_MAGIC {
             Err(DevTreeError::InvalidMagicNumber)
         } else {
@@ -117,7 +124,7 @@ impl<'a> DevTree<'a> {
     /// Using the provided byte slice this method will:
     ///
     /// 1. Verify that the slice begins with the magic Device Tree header
-    /// 2. Return the reported `totalsize` field of the DeviceTree header
+    /// 2. Return the reported `totalsize` field of the Device Tree header
     ///
     /// When one must parse a Flattened Device Tree, it's possible that the actual size of the device
     /// tree may be unknown. For that reason, this method can be called before constructing the
@@ -233,6 +240,45 @@ impl<'a> DevTree<'a> {
         iters::DevTreeNodeIter::new(self)
     }
 
+    /// Returns an iterator over objects within the [`DevTreeItem`] enum
+    #[inline]
+    #[must_use]
+    pub fn items(&self) -> iters::DevTreeIter {
+        iters::DevTreeIter::new(self)
+    }
+
+    /// Map the supplied predicate over the [`DevTreeItem`] enum. 
+    ///
+    /// If the predicate returns `true`, Some(([`DevTreeItem`], [`iters::DevTreeIter`])) will be returned.
+    /// The [`iters::DevTreeIter`] may be used to continue searching through the tree.
+    ///
+    /// The predicate function may return true to simply terminate the search.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// fn is_uart_compatible(item: &DevTreeItem) -> Bool {
+    ///     match item {
+    ///         DevTreeItem::Prop(p) => {
+    ///         (p.name().unwrap() == "compatible") && p.get_str(0) == "ns16550a")
+    ///         },
+    ///         _ => false,
+    ///     }
+    /// }
+    ///
+    /// let devtree = DevTree::new(buf).unwrap();
+    ///
+    /// // Print the names of all compatible uarts
+    /// if let Some((compatible_prop, mut iter)) = devtree.find(is_uart_compatible) {
+    ///     println!(compatible_prop.parent().name()?);
+    /// }
+    ///
+    /// // Continue the search and keep printing their names.
+    /// while let Some((compatible_prop, mut iter)) = iter.find(is_uart_compatible) {
+    ///     println!(compatible_prop.parent().name()?);
+    /// }
+    /// ```
+    ///
     #[inline]
     pub fn find<F>(&'a self, predicate: F) -> Option<(DevTreeItem<'a>, iters::DevTreeIter<'a>)>
     where
@@ -240,24 +286,60 @@ impl<'a> DevTree<'a> {
     {
         iters::DevTreeIter::new(self).find(predicate)
     }
+
+    /// Map the supplied predicate over all [`DevTreeProp`] objects
+    ///
+    /// If the predicate returns `true`, Some(([`DevTreeProp`], [`iters::DevTreePropIter`])) will be returned.
+    /// The [`iters::DevTreePropIter`] may be used to continue searching through the tree.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let devtree = DevTree::new(buf).unwrap();
+    ///
+    /// // Print the name of a compatible node
+    /// if let Some((compatible_prop, _)) = devtree.find_prop(|prop| 
+    ///     (prop.name == "compatible") && (p.get_str(0) == "ns16550a")) {
+    ///     println!(compatible_prop.parent().name()?);
+    /// }
+    /// ```
+    ///
+    #[inline]
+    pub fn find_prop<F>(&'a self, predicate: F) -> Option<(DevTreeProp<'a>, iters::DevTreePropIter<'a>)>
+    where
+        F: Fn(&DevTreeProp) -> bool,
+    {
+        iters::DevTreePropIter::from(iters::DevTreePropIter::new(self)).find(predicate)
+    }
+
+    /// Map the supplied predicate over all [`DevTreeNode`] objects
+    ///
+    /// If the predicate returns `true`, Some(([`DevTreeItem`], [`iters::DevTreeNodeIter`])) will be returned.
+    /// The [`iters::DevTreeNodeIter`] may be used to continue searching through the tree.
+    #[inline]
+    pub fn find_node<F>(&'a self, predicate: F) -> Option<(DevTreeNode<'a>, iters::DevTreeNodeIter<'a>)>
+    where
+        F: Fn(&DevTreeNode) -> bool,
+    {
+        iters::DevTreeNodeIter::from(iters::DevTreeIter::new(self)).find(predicate)
+    }
 }
 
+/// An enum which contains either a [`DevTreeNode`] or a [`DevTreeProp`]
+#[derive(Clone, Debug)]
 pub enum DevTreeItem<'a> {
     Node(DevTreeNode<'a>),
     Prop(DevTreeProp<'a>),
 }
 
 /// A handle to a Device Tree Node within the device tree.
+#[derive(Clone, Debug)]
 pub struct DevTreeNode<'a> {
     name: Result<&'a Str, DevTreeError>,
     parse_iter: iters::DevTreeIter<'a>,
 }
 
 impl<'a> DevTreeNode<'a> {
-    fn new(name: Result<&'a Str, DevTreeError>, parse_iter: iters::DevTreeIter<'a>) -> Self {
-        Self { name, parse_iter }
-    }
-
     /// Returns the name of the `DevTreeNode` (including unit address tag)
     #[inline]
     pub fn name(&'a self) -> Result<&'a Str, DevTreeError> {
@@ -273,6 +355,7 @@ impl<'a> DevTreeNode<'a> {
 }
 
 /// A handle to a [`DevTreeNode`]'s Device Tree Property
+#[derive(Clone, Debug)]
 pub struct DevTreeProp<'a> {
     parent_iter: iters::DevTreeIter<'a>,
     propbuf: &'a [u8],
@@ -286,12 +369,11 @@ impl<'a> DevTreeProp<'a> {
         self.get_prop_str()
     }
 
-    fn get_prop_str(&self) -> Result<&'a Str, DevTreeError> {
-        unsafe {
-            let str_offset = self.parent_iter.fdt.off_dt_strings() + self.nameoff;
-            let name = self.parent_iter.fdt.buf.read_bstring0(str_offset)?;
-            Ok(bytes_as_str(name)?)
-        }
+    /// Returns the node which this property is attached to
+    #[inline]
+    #[must_use]
+    pub fn parent(&self) -> DevTreeNode {
+        self.parent_iter.clone().next_node().unwrap()
     }
 
     /// Returns the length of the property value within the device tree
@@ -352,6 +434,7 @@ impl<'a> DevTreeProp<'a> {
             .or(Err(DevTreeError::InvalidOffset))
     }
 
+    /// Returns the string at the given offset if it can be parsed
     /// # Safety
     ///
     /// See the safety note of [`DevTreeProp::get_u32`]
@@ -390,6 +473,14 @@ impl<'a> DevTreeProp<'a> {
     #[inline]
     pub unsafe fn get_raw(&self) -> &'a [u8] {
         self.propbuf
+    }
+
+    fn get_prop_str(&self) -> Result<&'a Str, DevTreeError> {
+        unsafe {
+            let str_offset = self.parent_iter.fdt.off_dt_strings() + self.nameoff;
+            let name = self.parent_iter.fdt.buf.read_bstring0(str_offset)?;
+            Ok(bytes_as_str(name)?)
+        }
     }
 
     /// # Safety

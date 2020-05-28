@@ -1,3 +1,4 @@
+//! This module provides definitions of structures and enums from the Device Tree Specification.
 use endian_type::types::{u32_be, u64_be};
 use num_derive::FromPrimitive;
 
