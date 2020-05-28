@@ -1,7 +1,4 @@
-#![deny(
-     clippy::all,
-     clippy::cargo,
- )]
+#![deny(clippy::all, clippy::cargo)]
 #![allow(clippy::as_conversions)]
 #![allow(clippy::print_stdout)]
 #![allow(clippy::implicit_return)]
@@ -15,7 +12,7 @@ extern crate endian_type;
 extern crate memoffset;
 
 mod buf_util;
-mod iters;
+pub mod iters;
 pub mod spec;
 
 use buf_util::{SliceRead, SliceReadError};
@@ -134,7 +131,7 @@ impl<'a> DevTree<'a> {
     /// ```
     /// let size = DevTree::read_totalsize(buf).unwrap();
     /// let buf = buf[..size];
-    /// DevTree::read_totalsize(bu).unwrap();
+    /// let dt = DevTree::new(buf).unwrap();
     /// ```
     ///
     /// # Safety
@@ -235,16 +232,29 @@ impl<'a> DevTree<'a> {
     pub fn nodes(&self) -> iters::DevTreeNodeIter {
         iters::DevTreeNodeIter::new(self)
     }
+
+    #[inline]
+    pub fn find<F>(&'a self, predicate: F) -> Option<(DevTreeItem<'a>, iters::DevTreeIter<'a>)>
+    where
+        F: Fn(&DevTreeItem) -> bool,
+    {
+        iters::DevTreeIter::new(self).find(predicate)
+    }
+}
+
+pub enum DevTreeItem<'a> {
+    Node(DevTreeNode<'a>),
+    Prop(DevTreeProp<'a>),
 }
 
 /// A handle to a Device Tree Node within the device tree.
 pub struct DevTreeNode<'a> {
     name: Result<&'a Str, DevTreeError>,
-    parse_iter: iters::DevTreeParseIter<'a>,
+    parse_iter: iters::DevTreeIter<'a>,
 }
 
 impl<'a> DevTreeNode<'a> {
-    fn new(name: Result<&'a Str, DevTreeError>, parse_iter: iters::DevTreeParseIter<'a>) -> Self {
+    fn new(name: Result<&'a Str, DevTreeError>, parse_iter: iters::DevTreeIter<'a>) -> Self {
         Self { name, parse_iter }
     }
 
@@ -264,7 +274,7 @@ impl<'a> DevTreeNode<'a> {
 
 /// A handle to a [`DevTreeNode`]'s Device Tree Property
 pub struct DevTreeProp<'a> {
-    parse_iter: iters::DevTreeParseIter<'a>,
+    parse_iter: iters::DevTreeIter<'a>,
     propbuf: &'a [u8],
     nameoff: usize,
 }

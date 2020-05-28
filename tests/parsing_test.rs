@@ -1,11 +1,11 @@
 extern crate fdt_rs;
 
-use fdt_rs::Str;
 use core::mem::size_of;
+use fdt_rs::Str;
 
-use std::path::PathBuf;
 use std::fs::{metadata, File};
 use std::io::Read;
+use std::path::PathBuf;
 
 use fdt_rs::DevTree;
 
@@ -93,5 +93,21 @@ fn node_prop_iter() {
         }
         // Wait until the end to drop in since we alias the address.
         std::mem::drop(vec);
+    }
+}
+
+#[test]
+fn find_first_compatible() {
+    use fdt_rs::DevTreeItem;
+    unsafe {
+        let (vec, buf) = read_dtb();
+        let blob = DevTree::new(buf).unwrap();
+        // TODO
+        assert!(blob.find(|item| 
+            match item {
+                DevTreeItem::Prop(p) => p.name().unwrap() == "compatible",
+                _ => false,
+            }
+        ).is_some());
     }
 }

@@ -4,7 +4,7 @@ use num_traits::FromPrimitive;
 
 use super::buf_util::SliceRead;
 use super::spec::{fdt_prop_header, fdt_reserve_entry, FdtTok};
-use super::{DevTree, DevTreeError, DevTreeNode, DevTreeProp};
+use super::{DevTree, DevTreeError, DevTreeItem, DevTreeNode, DevTreeProp};
 use crate::{bytes_as_str, Str};
 
 #[derive(Clone, Debug)]
@@ -81,21 +81,76 @@ impl<'a> ParsedItem<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct DevTreeParseIter<'a> {
+pub struct DevTreeIter<'a> {
     dt_offset: usize,
     pub(crate) fdt: &'a DevTree<'a>,
 }
 
-impl<'a> DevTreeParseIter<'a> {
+impl<'a> DevTreeIter<'a> {
     pub(crate) fn new(fdt: &'a DevTree) -> Self {
         Self {
             dt_offset: fdt.off_dt_struct(),
             fdt,
         }
     }
+
+    fn node_from_parse(&self, node: ParsedNode<'a>) -> DevTreeNode<'a> {
+        DevTreeNode::new(node.name, *self)
+    }
+
+    fn prop_from_parse(&self, prev: Self, prop: ParsedProp<'a>) -> DevTreeProp<'a> {
+        DevTreeProp {
+            parse_iter: prev,
+            nameoff: prop.nameoff as usize,
+            propbuf: prop.propbuf,
+        }
+    }
+
+    fn next_node(&mut self) -> Option<DevTreeNode<'a>> {
+        loop {
+            match self.next() {
+                Some(ParsedItem::Node(n)) => return Some(self.node_from_parse(n)),
+                Some(_) => {
+                    continue;
+                }
+                _ => return None,
+            }
+        }
+    }
+
+    fn next_prop(&mut self) -> Option<DevTreeProp<'a>> {
+        let copy = *self;
+        match self.next() {
+            Some(ParsedItem::Prop(p)) => Some(self.prop_from_parse(copy, p)),
+            // Return if a new node or an EOF.
+            _ => None,
+        }
+    }
+
+    fn next_item(&mut self) -> Option<crate::DevTreeItem<'a>> {
+        let copy = *self;
+        match self.next() {
+            Some(ParsedItem::Prop(p)) => Some(DevTreeItem::Prop(self.prop_from_parse(copy, p))),
+            Some(ParsedItem::Node(n)) => Some(DevTreeItem::Node(self.node_from_parse(n))),
+            None => None,
+        }
+    }
+
+    #[inline]
+    pub fn find<F>(&mut self, predicate: F) -> Option<(DevTreeItem<'a>, Self)>
+    where
+        F: Fn(&DevTreeItem) -> bool,
+    {
+        while let Some(i) = self.next_item() {
+            if predicate(&i) {
+                return Some((i, *self));
+            }
+        }
+        None
+    }
 }
 
-impl<'a> Iterator for DevTreeParseIter<'a> {
+impl<'a> Iterator for DevTreeIter<'a> {
     type Item = ParsedItem<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -109,58 +164,33 @@ impl<'a> Iterator for DevTreeParseIter<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct DevTreeNodeIter<'a> {
-    iter: DevTreeParseIter<'a>,
-}
+pub struct DevTreeNodeIter<'a>(DevTreeIter<'a>);
 
 impl<'a> DevTreeNodeIter<'a> {
     pub(crate) fn new(fdt: &'a DevTree) -> Self {
-        Self {
-            iter: DevTreeParseIter::new(fdt),
-        }
+        Self(DevTreeIter::new(fdt))
     }
 }
 
 impl<'a> Iterator for DevTreeNodeIter<'a> {
     type Item = DevTreeNode<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.iter.next() {
-                Some(ParsedItem::Node(n)) => return Some(DevTreeNode::new(n.name, self.iter)),
-                Some(_) => {
-                    continue;
-                }
-                _ => return None,
-            }
-        }
+        self.0.next_node()
     }
 }
 
-pub struct DevTreeNodePropIter<'a> {
-    pub parse_iter: DevTreeParseIter<'a>,
-}
+pub struct DevTreeNodePropIter<'a>(DevTreeIter<'a>);
 
 impl<'a> DevTreeNodePropIter<'a> {
     pub(crate) fn new(node: &'a DevTreeNode) -> Self {
-        Self {
-            parse_iter: node.parse_iter,
-        }
+        Self(node.parse_iter)
     }
 }
 
 impl<'a> Iterator for DevTreeNodePropIter<'a> {
     type Item = DevTreeProp<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        let this = self.parse_iter;
-        match self.parse_iter.next() {
-            Some(ParsedItem::Prop(p)) => Some(Self::Item {
-                parse_iter: this,
-                nameoff: p.nameoff as usize,
-                propbuf: p.propbuf,
-            }),
-            // Return if a new node or an EOF.
-            _ => None,
-        }
+        self.0.next_prop()
     }
 }
 
