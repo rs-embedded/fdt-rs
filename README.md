@@ -1,6 +1,6 @@
 # fdt-rs
 
-A flattened device tree parser for embedded (low memory) no-std environments
+A Flattened Device Tree parser for embedded no-std environments
 
 ## Usage
 
@@ -35,7 +35,7 @@ Without this feature enabled, `str` references will be returned.
 
 ## Example
 
-```
+```rust
 extern crate fdt_rs;
 
 // Initialize the devtree using raw an &[u8] array
