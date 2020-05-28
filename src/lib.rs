@@ -274,7 +274,7 @@ impl<'a> DevTreeNode<'a> {
 
 /// A handle to a [`DevTreeNode`]'s Device Tree Property
 pub struct DevTreeProp<'a> {
-    parse_iter: iters::DevTreeIter<'a>,
+    parent_iter: iters::DevTreeIter<'a>,
     propbuf: &'a [u8],
     nameoff: usize,
 }
@@ -288,8 +288,8 @@ impl<'a> DevTreeProp<'a> {
 
     fn get_prop_str(&self) -> Result<&'a Str, DevTreeError> {
         unsafe {
-            let str_offset = self.parse_iter.fdt.off_dt_strings() + self.nameoff;
-            let name = self.parse_iter.fdt.buf.read_bstring0(str_offset)?;
+            let str_offset = self.parent_iter.fdt.off_dt_strings() + self.nameoff;
+            let name = self.parent_iter.fdt.buf.read_bstring0(str_offset)?;
             Ok(bytes_as_str(name)?)
         }
     }

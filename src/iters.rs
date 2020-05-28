@@ -84,13 +84,23 @@ impl<'a> DevTreeIter<'a> {
         }
     }
 
+    fn current_node_itr(&self) -> Option<DevTreeIter<'a>> {
+        match self.current_node_offset {
+            Some(offset) => Some(DevTreeIter {
+                fdt: self.fdt,
+                current_node_offset: self.current_node_offset,
+                offset: offset.get()}) ,
+            None => None,
+        }
+    }
+
     fn node_from_parse(&self, node: ParsedNode<'a>) -> DevTreeNode<'a> {
         DevTreeNode::new(node.name, *self)
     }
 
-    fn prop_from_parse(&self, prev: Self, prop: ParsedProp<'a>) -> DevTreeProp<'a> {
+    fn prop_from_parse(&self, prop: ParsedProp<'a>) -> DevTreeProp<'a> {
         DevTreeProp {
-            parse_iter: prev,
+            parent_iter: self.current_node_itr().unwrap(),
             nameoff: prop.nameoff as usize,
             propbuf: prop.propbuf,
         }
@@ -109,18 +119,16 @@ impl<'a> DevTreeIter<'a> {
     }
 
     fn next_prop(&mut self) -> Option<DevTreeProp<'a>> {
-        let copy = *self;
         match self.next() {
-            Some(ParsedItem::Prop(p)) => Some(self.prop_from_parse(copy, p)),
+            Some(ParsedItem::Prop(p)) => Some(self.prop_from_parse(p)),
             // Return if a new node or an EOF.
             _ => None,
         }
     }
 
     fn next_item(&mut self) -> Option<crate::DevTreeItem<'a>> {
-        let copy = *self;
         match self.next() {
-            Some(ParsedItem::Prop(p)) => Some(DevTreeItem::Prop(self.prop_from_parse(copy, p))),
+            Some(ParsedItem::Prop(p)) => Some(DevTreeItem::Prop(self.prop_from_parse(p))),
             Some(ParsedItem::Node(n)) => Some(DevTreeItem::Node(self.node_from_parse(n))),
             None => None,
         }
