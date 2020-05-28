@@ -10,7 +10,7 @@ use super::spec::{fdt_prop_header, fdt_reserve_entry, FdtTok};
 use super::{DevTree, DevTreeError, DevTreeItem, DevTreeNode, DevTreeProp};
 use crate::{bytes_as_str};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DevTreeReserveEntryIter<'a> {
     offset: usize,
     fdt: &'a DevTree<'a>,
@@ -56,7 +56,7 @@ impl<'a> Iterator for DevTreeReserveEntryIter<'a> {
 }
 
 /// An iterator over all [`DevTreeItem`] objects.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DevTreeIter<'a> {
     offset: usize,
     current_node_offset: Option<NonZeroUsize>,
@@ -214,7 +214,7 @@ impl<'a> Iterator for DevTreeIter<'a> {
 }
 
 /// An interator over [`DevTreeNode`] objects in the [`DevTree`]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DevTreeNodeIter<'a>(DevTreeIter<'a>);
 
 impl<'a> DevTreeNodeIter<'a> {
@@ -251,7 +251,7 @@ impl<'a> From<DevTreeIter<'a>> for DevTreeNodeIter<'a> {
 }
 
 /// An interator over [`DevTreeProp`] objects in the [`DevTree`]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DevTreePropIter<'a>(DevTreeIter<'a>);
 
 impl<'a> DevTreePropIter<'a> {
@@ -288,7 +288,7 @@ impl<'a> From<DevTreeIter<'a>> for DevTreePropIter<'a> {
 }
 
 /// An interator over [`DevTreeProp`] objects on a single node within the [`DevTree`]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DevTreeNodePropIter<'a>(DevTreeIter<'a>);
 
 impl<'a> DevTreeNodePropIter<'a> {

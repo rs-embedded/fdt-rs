@@ -1,8 +1,8 @@
 [package]
 name = "fdt-rs"
 version = "0.1.0"
-description = "A safe flattended device tree parser for no-std environments"
-authors = ["Sean Wilson <sean.wilson@ghs.com>", "Marc Brinkmann <git@marcbrinkmann.de>"]
+description = "A flattened device tree parser for embedded no-std environments"
+authors = ["Sean Wilson <sean.wilson@ghs.com>"]
 license = "MIT"
 edition = "2018"
 repository = "https://gitlab.com/ertos/fdt-rs"
@@ -12,12 +12,9 @@ keywords = ["Device Tree", "FDT", "Flattened Device Tree", "embedded", "no-std"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies.endian-type]
-#git = "https://github.com/spwilson2/endian-type"
-#branch = "dev"
-path = "endian-type"
+[dependencies.endian-type-rs]
+version = "0.1.4"
 default-features = false
-
 [dependencies.num-derive]
 version = "0.3"
 default-features = false

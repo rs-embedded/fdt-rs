@@ -1,3 +1,29 @@
+//! A flattened device tree parser for embedded, low memory, and safety-critical no-std environment
+//!
+//! * This device tree parser uses zero-allocation
+//! * Remains safe even in the event of an invalid device tree
+//! * Never performs misaligned reads
+//!
+//! ## Features
+//!
+//! This crate can be used without the standard library (`#![no_std]`) by disabling
+//! the default `std` feature. To use `no-std` place the following in your `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies.fdt-rs]
+//! version = "0.1"
+//! default-features = false
+//! # features = ["ascii"]    # <--- Uncomment if you wish to use the ascii crate for str's
+//! ```
+//!
+//! Embeded software may not require the use of utf8 strings. For memory and processing constrained
+//! environments ASCII may be suitable. For this reason, this crate supports the use of either
+//! ascii or standard rust utf-8 `str`  types.
+//!
+//! Enabling the `"ascii"` feature will configure the `Str` type returned by string accessor
+//! methods to be of type `AsciiStr` provided by the
+//! [ascii crate](https://docs.rs/ascii/1.0.0/ascii/).
+//!
 #![deny(clippy::all, clippy::cargo)]
 #![allow(clippy::as_conversions)]
 
@@ -6,7 +32,7 @@
 extern crate core;
 #[macro_use]
 extern crate cfg_if;
-extern crate endian_type;
+extern crate endian_type_rs as endian_type;
 #[macro_use]
 extern crate memoffset;
 
@@ -247,7 +273,7 @@ impl<'a> DevTree<'a> {
         iters::DevTreeIter::new(self)
     }
 
-    /// Map the supplied predicate over the [`DevTreeItem`] enum. 
+    /// Map the supplied predicate over the [`DevTreeItem`] enum.
     ///
     /// If the predicate returns `true`, Some(([`DevTreeItem`], [`iters::DevTreeIter`])) will be returned.
     /// The [`iters::DevTreeIter`] may be used to continue searching through the tree.
@@ -298,7 +324,7 @@ impl<'a> DevTree<'a> {
     /// let devtree = DevTree::new(buf).unwrap();
     ///
     /// // Print the name of a compatible node
-    /// if let Some((compatible_prop, _)) = devtree.find_prop(|prop| 
+    /// if let Some((compatible_prop, _)) = devtree.find_prop(|prop|
     ///     (prop.name == "compatible") && (p.get_str(0) == "ns16550a")) {
     ///     println!(compatible_prop.parent().name()?);
     /// }
@@ -309,7 +335,7 @@ impl<'a> DevTree<'a> {
     where
         F: Fn(&DevTreeProp) -> bool,
     {
-        iters::DevTreePropIter::from(iters::DevTreePropIter::new(self)).find(predicate)
+        iters::DevTreePropIter::new(self).find(predicate)
     }
 
     /// Map the supplied predicate over all [`DevTreeNode`] objects
@@ -321,19 +347,19 @@ impl<'a> DevTree<'a> {
     where
         F: Fn(&DevTreeNode) -> bool,
     {
-        iters::DevTreeNodeIter::from(iters::DevTreeIter::new(self)).find(predicate)
+        iters::DevTreeNodeIter::new(self).find(predicate)
     }
 }
 
 /// An enum which contains either a [`DevTreeNode`] or a [`DevTreeProp`]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum DevTreeItem<'a> {
     Node(DevTreeNode<'a>),
     Prop(DevTreeProp<'a>),
 }
 
 /// A handle to a Device Tree Node within the device tree.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DevTreeNode<'a> {
     name: Result<&'a Str, DevTreeError>,
     parse_iter: iters::DevTreeIter<'a>,
@@ -355,7 +381,7 @@ impl<'a> DevTreeNode<'a> {
 }
 
 /// A handle to a [`DevTreeNode`]'s Device Tree Property
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DevTreeProp<'a> {
     parent_iter: iters::DevTreeIter<'a>,
     propbuf: &'a [u8],

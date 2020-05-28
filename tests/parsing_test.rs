@@ -109,5 +109,6 @@ fn find_first_compatible() {
                 _ => false,
             }
         ).is_some());
+        std::mem::drop(vec);
     }
 }
