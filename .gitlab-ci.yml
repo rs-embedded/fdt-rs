@@ -1,24 +1,25 @@
-image: 'rust:latest'
 
-test:
+test-stable:
+  image: 'rust:latest'
   script:
-  - rustc --version && cargo --version      # Print version info for debugging
-  - cargo test --tests --verbose --jobs 1
-  - cargo test --tests --verbose --jobs 1 --release
-  - cargo test --features doctest --doc --verbose --jobs 1
-  - cargo test --features doctest --doc --verbose --jobs 1 --release
+  - rustc +stable --version && cargo +stable --version      # Print version info for debugging
+  - cargo +stable test --tests --verbose --jobs 1
+  - cargo +stable test --tests --verbose --jobs 1 --release
+  - cargo +stable test --features doctest --doc --verbose --jobs 1
+  - cargo +stable test --features doctest --doc --verbose --jobs 1 --release
 
-  - cargo test --no-default-features --tests --verbose --jobs 1
-  - cargo test --no-default-features --tests --verbose --jobs 1 --release
-  - cargo test --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo test --no-default-features --features doctest --doc --verbose --jobs 1 --release
+  - cargo +stable test --no-default-features --tests --verbose --jobs 1
+  - cargo +stable test --no-default-features --tests --verbose --jobs 1 --release
+  - cargo +stable test --no-default-features --features doctest --doc --verbose --jobs 1
+  - cargo +stable test --no-default-features --features doctest --doc --verbose --jobs 1 --release
 
-  - cargo test --features ascii --tests --verbose --jobs 1
-  - cargo test --features ascii --tests --verbose --jobs 1 --release
-  - cargo test --features ascii --features doctest --doc --verbose --jobs 1
-  - cargo test --features ascii --features doctest --doc --verbose --jobs 1 --release
+  - cargo +stable test --features ascii --tests --verbose --jobs 1
+  - cargo +stable test --features ascii --tests --verbose --jobs 1 --release
+  - cargo +stable test --features ascii --features doctest --doc --verbose --jobs 1
+  - cargo +stable test --features ascii --features doctest --doc --verbose --jobs 1 --release
 
 test-nightly:
+  image: 'rustlang/rust:nightly'
   script:
   - rustc +nightly --version && cargo +nightly --version      # Print version info for debugging
   - cargo +nighly test --tests --verbose --jobs 1
