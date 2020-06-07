@@ -26,10 +26,8 @@
 //!
 #![deny(clippy::all, clippy::cargo)]
 #![allow(clippy::as_conversions)]
-
 // Test the readme if using nightly.
 #![cfg_attr(RUSTC_IS_NIGHTLY, feature(external_doc))]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
 extern crate core;
@@ -128,7 +126,6 @@ impl From<StrError> for DevTreeError {
 pub struct DevTree<'a> {
     buf: &'a [u8],
 }
-
 
 impl<'a> DevTree<'a> {
     pub const MIN_HEADER_SIZE: usize = size_of::<fdt_header>();
@@ -354,7 +351,10 @@ impl<'a> DevTree<'a> {
     /// ```
     ///
     #[inline]
-    pub fn find_prop<F>(&'a self, predicate: F) -> Option<(DevTreeProp<'a>, iters::DevTreePropIter<'a>)>
+    pub fn find_prop<F>(
+        &'a self,
+        predicate: F,
+    ) -> Option<(DevTreeProp<'a>, iters::DevTreePropIter<'a>)>
     where
         F: Fn(&DevTreeProp) -> Result<bool, DevTreeError>,
     {
@@ -366,7 +366,10 @@ impl<'a> DevTree<'a> {
     /// If the predicate returns `true`, Some(([`DevTreeItem`], [`iters::DevTreeNodeIter`])) will be returned.
     /// The [`iters::DevTreeNodeIter`] may be used to continue searching through the tree.
     #[inline]
-    pub fn find_node<F>(&'a self, predicate: F) -> Option<(DevTreeNode<'a>, iters::DevTreeNodeIter<'a>)>
+    pub fn find_node<F>(
+        &'a self,
+        predicate: F,
+    ) -> Option<(DevTreeNode<'a>, iters::DevTreeNodeIter<'a>)>
     where
         F: Fn(&DevTreeNode) -> Result<bool, DevTreeError>,
     {
@@ -678,15 +681,14 @@ pub mod doctest {
     // Ignore ascii since we don't want to have to bother with string conversion.
     #[cfg(RUSTC_IS_NIGHTLY)]
     #[cfg(not(feature = "ascii"))]
-    #[doc(include="../README.md")]
+    #[doc(include = "../README.md")]
     pub struct ReadmeDoctests;
 
-    #[repr(align(4))] struct _Wrapper<T>(T);
+    #[repr(align(4))]
+    struct _Wrapper<T>(T);
     pub const FDT: &[u8] = &_Wrapper(*include_bytes!("../tests/riscv64-virt.dtb")).0;
 
     pub fn get_devtree() -> DevTree<'static> {
-        unsafe {
-            DevTree::new(FDT).unwrap()
-        }
+        unsafe { DevTree::new(FDT).unwrap() }
     }
 }

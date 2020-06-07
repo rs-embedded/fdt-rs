@@ -1,10 +1,11 @@
 extern crate fdt_rs;
 
 use core::mem::size_of;
-use fdt_rs::Str;
 use fdt_rs::DevTree;
+use fdt_rs::Str;
 
-#[repr(align(4))] struct _Wrapper<T>(T);
+#[repr(align(4))]
+struct _Wrapper<T>(T);
 pub const FDT: &[u8] = &_Wrapper(*include_bytes!("riscv64-virt.dtb")).0;
 
 #[macro_use]
@@ -87,7 +88,9 @@ fn node_prop_iter() {
 fn find_first_compatible_works_on_initial_node() {
     unsafe {
         let fdt = DevTree::new(FDT).unwrap();
-        let node = fdt.find_first_compatible_node(str_from_static("riscv-virtio")).unwrap();
+        let node = fdt
+            .find_first_compatible_node(str_from_static("riscv-virtio"))
+            .unwrap();
         assert!(node.name().unwrap() == ""); // Root node has no "name"
     }
 }
@@ -96,27 +99,29 @@ fn find_first_compatible_works_on_initial_node() {
 fn find_first_compatible_works_on_final_node() {
     unsafe {
         let fdt = DevTree::new(FDT).unwrap();
-        let node = fdt.find_first_compatible_node(str_from_static("riscv,clint0")).unwrap();
+        let node = fdt
+            .find_first_compatible_node(str_from_static("riscv,clint0"))
+            .unwrap();
         assert!(node.name().unwrap() == "clint@2000000");
     }
 }
 #[test]
 fn find_all_compatible() {
     unsafe {
-    let devtree = DevTree::new(FDT).unwrap();
-    let compat = str_from_static("virtio,mmio");
-    let exp = str_from_static("virtio_mmio@1000");
-    let mut count = 0;
+        let devtree = DevTree::new(FDT).unwrap();
+        let compat = str_from_static("virtio,mmio");
+        let exp = str_from_static("virtio_mmio@1000");
+        let mut count = 0;
 
-    if let Some(mut cur) = devtree.root() {
-        while let Some(node) = cur.find_next_compatible_node(compat) {
-            count += 1;
-            // Verify the prefix matches.
-            // (ascii doesn't have startswith)
-            assert!(node.name().unwrap()[0..exp.len()] == *exp);
-            cur = node;
+        if let Some(mut cur) = devtree.root() {
+            while let Some(node) = cur.find_next_compatible_node(compat) {
+                count += 1;
+                // Verify the prefix matches.
+                // (ascii doesn't have startswith)
+                assert!(node.name().unwrap()[0..exp.len()] == *exp);
+                cur = node;
+            }
         }
-    }
-    assert!(count == 8);
+        assert!(count == 8);
     }
 }

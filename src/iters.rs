@@ -6,10 +6,10 @@ use core::num::NonZeroUsize;
 use num_traits::FromPrimitive;
 
 use super::buf_util::SliceRead;
+use super::spec;
 use super::spec::{fdt_prop_header, fdt_reserve_entry, FdtTok};
 use super::{DevTree, DevTreeError, DevTreeItem, DevTreeNode, DevTreeProp};
-use super::spec;
-use crate::{bytes_as_str};
+use crate::bytes_as_str;
 
 #[derive(Clone)]
 pub struct DevTreeReserveEntryIter<'a> {
@@ -78,7 +78,8 @@ impl<'a> DevTreeIter<'a> {
             Some(offset) => Some(DevTreeIter {
                 fdt: self.fdt,
                 current_node_offset: self.current_node_offset,
-                offset: offset.get()}) ,
+                offset: offset.get(),
+            }),
             None => None,
         }
     }
@@ -168,14 +169,23 @@ impl<'a> DevTreeIter<'a> {
                     Some(FdtTok::BeginNode) => {
                         // Unchecked is guarunteed safe.
                         // We're accessing past address zero of a device tree.
-                        self.current_node_offset = Some(NonZeroUsize::new_unchecked(starting_offset));
+                        self.current_node_offset =
+                            Some(NonZeroUsize::new_unchecked(starting_offset));
 
-                        let name = self.fdt.buf.nread_bstring0(self.offset, spec::MAX_NODE_NAME_LEN - 1)?;
+                        let name = self
+                            .fdt
+                            .buf
+                            .nread_bstring0(self.offset, spec::MAX_NODE_NAME_LEN - 1)?;
 
                         // Move to the end of str (adding for null byte).
                         self.offset += name.len() + 1;
                         // Per spec - align back to u32.
-                        self.offset += self.fdt.buf.as_ptr().add(self.offset).align_offset(size_of::<u32>());
+                        self.offset += self
+                            .fdt
+                            .buf
+                            .as_ptr()
+                            .add(self.offset)
+                            .align_offset(size_of::<u32>());
 
                         return Ok(Some(DevTreeItem::Node(DevTreeNode {
                             name: bytes_as_str(name).map_err(|e| e.into()),
@@ -191,7 +201,12 @@ impl<'a> DevTreeIter<'a> {
                         self.offset += propbuf.len();
 
                         // Align back to u32.
-                        self.offset += self.fdt.buf.as_ptr().add(self.offset).align_offset(size_of::<u32>());
+                        self.offset += self
+                            .fdt
+                            .buf
+                            .as_ptr()
+                            .add(self.offset)
+                            .align_offset(size_of::<u32>());
 
                         // We saw a property before ever seeing a node.
                         let parent = match self.current_node_itr() {
@@ -199,7 +214,7 @@ impl<'a> DevTreeIter<'a> {
                             None => return Err(DevTreeError::ParseError),
                         };
 
-                        return Ok(Some(DevTreeItem::Prop( DevTreeProp {
+                        return Ok(Some(DevTreeItem::Prop(DevTreeProp {
                             parent_iter: parent, // FIXME
                             nameoff: u32::from((*header).nameoff) as usize,
                             propbuf,
