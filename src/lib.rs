@@ -283,7 +283,7 @@ impl<'a> DevTree<'a> {
         iters::DevTreeIter::new(self)
     }
 
-    /// Returns an iterator over objects within the [`DevTreeItem`] enum
+    /// Returns the root [`DevTreeNode`] object of the device tree (if it exists).
     #[inline]
     pub fn root(&self) -> Option<DevTreeNode> {
         self.nodes().next()
