@@ -61,12 +61,11 @@ fn node_prop_iter() {
                     //println!("\t\t0x{:x}", prop.get_u32(0).unwrap());
                 }
                 if prop.length() > 0 {
-                    let i = prop.get_str_count();
-                    if i.is_ok() {
-                        if i.unwrap() == 0 {
+                    if let Ok(i) = prop.get_str_count() {
+                        if i == 0 {
                             break;
                         }
-                        let mut vec: Vec<Option<&Str>> = vec![None; i.unwrap()];
+                        let mut vec: Vec<Option<&Str>> = vec![None; i];
                         prop.get_strlist(&mut vec).unwrap();
 
                         let mut iter = vec.iter();
