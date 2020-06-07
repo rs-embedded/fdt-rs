@@ -23,7 +23,7 @@ test-stable:
   - cargo test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
   - cargo test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
   cache:
-    - target/
+    key: stable-build-cache
 
 test-nightly:
   image: 'rustlang/rust:nightly'
@@ -49,6 +49,8 @@ test-nightly:
   - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
   - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
   cache:
+    key: nightly-build-cache
+    paths:
     - target/
 
 docs:
@@ -57,7 +59,7 @@ docs:
   - rustc --version && cargo --version
   - cargo doc --no-deps
   cache:
-    - target/
+    key: stable-build-cache
 
 clippy:
   image: 'rust:latest'
@@ -69,4 +71,9 @@ clippy:
   - cargo clippy --no-default-features -- -D warnings
   - cargo clippy --features ascii --no-default-features -- -D warnings
   cache:
+    key: stable-build-cache
+
+cache:
+  key: stable-build-cache
+  paths:
     - target/
