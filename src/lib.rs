@@ -305,7 +305,7 @@ impl<'a> DevTree<'a> {
     ///     unsafe {
     ///         match item {
     ///             DevTreeItem::Prop(p) => {
-    ///                 Ok((p.name()? == "compatible") && (p.get_str(0)? == "ns16550a"))
+    ///                 Ok((p.name()? == "compatible") && (p.get_str()? == "ns16550a"))
     ///             },
     ///             _ => Ok(false),
     ///         }
@@ -345,7 +345,7 @@ impl<'a> DevTree<'a> {
     /// # let mut devtree = fdt_rs::doctest::get_devtree();
     /// // Print the first "ns16550a" compatible node.
     /// if let Some((compatible_prop, _)) = devtree.find_prop(|prop| unsafe {
-    ///     Ok((prop.name()? == "compatible") && (prop.get_str(0)? == "ns16550a"))
+    ///     Ok((prop.name()? == "compatible") && (prop.get_str()? == "ns16550a"))
     ///     }) {
     ///     println!("{}", compatible_prop.parent().name()?);
     ///     # assert!(compatible_prop.parent().name()? == "uart@10000000");
@@ -522,12 +522,21 @@ impl<'a> DevTreeProp<'a> {
             .or(Err(DevTreeError::InvalidOffset))
     }
 
-    /// Returns the string at the given offset if it can be parsed
+    /// Returns the string property as a string if it can be parsed as one.
     /// # Safety
     ///
     /// See the safety note of [`DevTreeProp::get_u32`]
     #[inline]
-    pub unsafe fn get_str(&'a self, offset: usize) -> Result<&'a Str, DevTreeError> {
+    pub unsafe fn get_str(&'a self) -> Result<&'a Str, DevTreeError> {
+        self.get_str_at(0)
+    }
+
+    /// Returns the string at the given offset within the property.
+    /// # Safety
+    ///
+    /// See the safety note of [`DevTreeProp::get_u32`]
+    #[inline]
+    pub unsafe fn get_str_at(&'a self, offset: usize) -> Result<&'a Str, DevTreeError> {
         match self.get_string(offset, true) {
             // Note, unwrap invariant is safe.
             // get_string returns Some(s) when second opt is true
@@ -544,6 +553,40 @@ impl<'a> DevTreeProp<'a> {
         self.iter_str_list(None)
     }
 
+    /// Fills the supplied slice of references with [`Str`] slices parsed from the given property.
+    /// If parsing is successful, the number of parsed strings will be returned.
+    ///
+    /// If an error occurred parsing one or more of the strings (E.g. they were not valid
+    /// UTF-8/ASCII strings) an [`Err`] of type [`DevTreeError`] will be returned.
+    /// ```
+    /// # #[cfg(not(feature = "ascii"))]
+    /// # {
+    /// # use fdt_rs::Str;
+    /// # let mut devtree = fdt_rs::doctest::get_devtree();
+    /// # let node = devtree.nodes().next().unwrap();
+    /// # let prop = node.props().next().unwrap();
+    /// # unsafe {
+    /// // Get the number of possible strings
+    /// if let Ok(count) = prop.get_str_count() {
+    ///
+    ///     // Allocate a vector to store the strings
+    ///     let mut vec: Vec<Option<&Str>> = vec![None; count];
+    ///
+    ///     // Read and parse the strings
+    ///     if let Ok(_) = prop.get_strlist(&mut vec) {
+    ///         let mut iter = vec.iter();
+    ///
+    ///         // Print out all the strings we found in the property
+    ///         while let Some(Some(s)) = iter.next() {
+    ///             print!("{} ", s);
+    ///         }
+    ///     }
+    /// }
+    /// # }
+    /// # }
+    /// # Ok::<(), fdt_rs::DevTreeError>(())
+    /// ```
+    ///
     /// # Safety
     ///
     /// See the safety note of [`DevTreeProp::get_u32`]
@@ -581,10 +624,6 @@ impl<'a> DevTreeProp<'a> {
     ) -> Result<(usize, Option<&'a Str>), DevTreeError> {
         match self.propbuf.read_bstring0(offset) {
             Ok(res_u8) => {
-                if res_u8.is_empty() {
-                    return Err(DevTreeError::InvalidOffset);
-                }
-
                 // Include null byte
                 let len = res_u8.len() + 1;
 
@@ -619,7 +658,7 @@ impl<'a> DevTreeProp<'a> {
 
             if let Some(list) = list_opt.as_deref_mut() {
                 // Note, unwrap invariant is safe.
-                // get_string returns Some(s) if list_opt is Some(list)
+                // get_string returns Some(s) if we ask it to parse and it returns Ok
                 (*list)[count] = Some(s.unwrap());
             };
         }
@@ -635,7 +674,10 @@ pub mod doctest {
 
     // Include the readme for doctests
     // https://doc.rust-lang.org/rustdoc/documentation-tests.html#include-items-only-when-collecting-doctests
+    //
+    // Ignore ascii since we don't want to have to bother with string conversion.
     #[cfg(RUSTC_IS_NIGHTLY)]
+    #[cfg(not(feature = "ascii"))]
     #[doc(include="../README.md")]
     pub struct ReadmeDoctests;
 

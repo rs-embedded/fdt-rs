@@ -43,13 +43,13 @@ first "ns16550a" compatible node, and if found prints that node's name.
 extern crate fdt_rs;
 use fdt_rs::*;
 
-// Place a device tree image into the rust binary.
-// Align it at 32-byte boundaries by using a wrapper struct.
+// Place a device tree image into the rust binary and
+// align it to a 32-byte boundary by using a wrapper struct.
 #[repr(align(4))] struct _Wrapper<T>(T);
 pub const FDT: &[u8] = &_Wrapper(*include_bytes!("../tests/riscv64-virt.dtb")).0;
 
 fn main() {
-    // Initialize the devtree using raw an &[u8] array
+    // Initialize the devtree using an &[u8] array.
     let devtree = unsafe {
 
         // Get the actual size of the device tree after reading its header.
@@ -61,11 +61,22 @@ fn main() {
     };
 
     // Find the first "ns16550a" compatible node within the device tree.
-    // If found, print the name of that node (inlcuding unit address).
-    if let Some((compatible_prop, _)) = devtree.find_prop(|prop| unsafe {
-        Ok((prop.name()? == "compatible") && (prop.get_str(0)? == "ns16550a"))
-        }) {
-        println!("{}", compatible_prop.parent().name().unwrap());
+    // If found, print the name of that node (including unit address).
+    if let Some(node) = devtree.find_first_compatible_node("ns16550a") {
+        println!("{}", node.name().unwrap());
+    }
+
+
+    // Use our own custom search method to find bootargs
+    //
+    // Find a node with a custom zero-length property "company,secret"
+    if let Some((compatible_prop, _)) = devtree.find_prop(
+            |prop|
+                Ok((prop.name()? == "bootargs"))) {
+        unsafe {
+            println!("{}", compatible_prop.get_str().unwrap());
+        }
     }
 }
+
 ```

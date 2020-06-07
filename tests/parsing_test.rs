@@ -54,19 +54,21 @@ fn node_prop_iter() {
     unsafe {
         let blob = DevTree::new(FDT).unwrap();
         for node in blob.nodes() {
-            println!("{}", node.name().unwrap());
             for prop in node.props() {
-                println!("\t{}", prop.name().unwrap());
                 if prop.length() == size_of::<u32>() {
                     //println!("\t\t0x{:x}", prop.get_u32(0).unwrap());
                 }
                 if prop.length() > 0 {
                     if let Ok(i) = prop.get_str_count() {
+                        println!("{}", i);
                         if i == 0 {
-                            break;
+                            continue;
                         }
-                        let mut vec: Vec<Option<&Str>> = vec![None; i];
-                        prop.get_strlist(&mut vec).unwrap();
+                        assert!(i < 64);
+                        let mut vec: &mut [Option<&Str>] = &mut [None; 64];
+                        if prop.get_strlist(&mut vec).is_err() {
+                            continue;
+                        }
 
                         let mut iter = vec.iter();
 

@@ -141,7 +141,7 @@ impl<'a> DevTreeIter<'a> {
         if iter.next().is_some() {
             let mut iter = DevTreePropIter::from(iter.0);
             if let Some((compatible_prop, _)) = iter.find(|prop| unsafe {
-                Ok((prop.name()? == "compatible") && (prop.get_str(0)? == string))
+                Ok((prop.name()? == "compatible") && (prop.get_str()? == string))
             }) {
                 return Some(compatible_prop.parent());
             }
