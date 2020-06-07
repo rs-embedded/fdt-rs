@@ -8,6 +8,7 @@ use num_traits::FromPrimitive;
 use super::buf_util::SliceRead;
 use super::spec::{fdt_prop_header, fdt_reserve_entry, FdtTok};
 use super::{DevTree, DevTreeError, DevTreeItem, DevTreeNode, DevTreeProp};
+use super::spec;
 use crate::{bytes_as_str};
 
 #[derive(Clone)]
@@ -169,7 +170,7 @@ impl<'a> DevTreeIter<'a> {
                         // We're accessing past address zero of a device tree.
                         self.current_node_offset = Some(NonZeroUsize::new_unchecked(starting_offset));
 
-                        let name = self.fdt.buf.read_bstring0(self.offset)?;
+                        let name = self.fdt.buf.nread_bstring0(self.offset, spec::MAX_NODE_NAME_LEN - 1)?;
 
                         // Move to the end of str (adding for null byte).
                         self.offset += name.len() + 1;

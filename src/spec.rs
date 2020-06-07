@@ -4,6 +4,7 @@ use num_derive::FromPrimitive;
 
 /// Magic number used to denote the beginning of a device tree (as a native machine number).
 pub const FDT_MAGIC: u32 = 0xd00d_feed;
+pub const MAX_NODE_NAME_LEN: usize = 31;
 
 /// Definition of the parsed phandle (a native machine number)
 pub type Phandle = u32;

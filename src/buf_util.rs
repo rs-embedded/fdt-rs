@@ -14,6 +14,7 @@ pub trait SliceRead {
     unsafe fn read_be_u32(&self, pos: usize) -> SliceReadResult<u32>;
     unsafe fn read_be_u64(&self, pos: usize) -> SliceReadResult<u64>;
     unsafe fn read_bstring0(&self, pos: usize) -> SliceReadResult<&[u8]>;
+    unsafe fn nread_bstring0(&self, pos: usize, len: usize) -> SliceReadResult<&[u8]>;
 }
 
 macro_rules! unchecked_be_read {
@@ -62,6 +63,17 @@ impl<'a> SliceRead for &'a [u8] {
     #[inline]
     unsafe fn read_bstring0(&self, pos: usize) -> SliceReadResult<&[u8]> {
         for i in pos..self.len() {
+            if self[i] == 0 {
+                return Ok(&self[pos..i]);
+            }
+        }
+        Err(SliceReadError::UnexpectedEndOfInput)
+    }
+
+    #[inline]
+    unsafe fn nread_bstring0(&self, pos: usize, len: usize) -> SliceReadResult<&[u8]> {
+        let end = core::cmp::min(len + pos, self.len());
+        for i in pos..end {
             if self[i] == 0 {
                 return Ok(&self[pos..i]);
             }
