@@ -58,7 +58,6 @@ cfg_if! {
             ascii::AsciiStr::from_ascii(buf)
         }
     } else {
-
         pub type StrError = core::str::Utf8Error;
         pub type Str = str;
         fn bytes_as_str(buf: &[u8]) -> Result<& Str, StrError> {
