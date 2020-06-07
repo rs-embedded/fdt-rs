@@ -46,3 +46,19 @@ test-nightly:
   - cargo +nightly test --features ascii --no-default-features --tests --verbose --jobs 1 --release
   - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
   - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
+
+docs:
+  image: 'rust:latest'
+  script:
+  - rustc --version && cargo --version
+  - cargo doc
+
+clippy:
+  image: 'rust:latest'
+  before_script:
+  - rustup component add clippy
+  script:
+  - cargo clippy -- -D warnings
+  - cargo clippy --features ascii -- -D warnings
+  - cargo clippy --no-default-features -- -D warnings
+  - cargo clippy --features ascii --no-default-features -- -D warnings

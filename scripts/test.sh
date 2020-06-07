@@ -1,1 +1,1 @@
-gitlab-runner exec docker test-stable
+gitlab-runner exec docker 
