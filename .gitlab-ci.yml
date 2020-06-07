@@ -51,7 +51,7 @@ docs:
   image: 'rust:latest'
   script:
   - rustc --version && cargo --version
-  - cargo doc
+  - cargo doc --no-deps
 
 clippy:
   image: 'rust:latest'
