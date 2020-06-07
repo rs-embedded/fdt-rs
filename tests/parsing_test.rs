@@ -2,11 +2,6 @@ extern crate fdt_rs;
 
 use core::mem::size_of;
 use fdt_rs::Str;
-
-use std::fs::{metadata, File};
-use std::io::Read;
-use std::path::PathBuf;
-
 use fdt_rs::DevTree;
 
 #[repr(align(4))] struct _Wrapper<T>(T);
