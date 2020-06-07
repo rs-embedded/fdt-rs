@@ -2,7 +2,7 @@
 name = "fdt-rs"
 version = "0.2.0"
 description = "A flattened device tree parser for embedded no-std environments"
-authors = ["Sean Wilson <sean.wilson@ghs.com>"]
+authors = ["Sean Wilson <spwilson27@gmail.com>"]
 license = "MIT"
 edition = "2018"
 repository = "https://gitlab.com/ertos/fdt-rs"
@@ -25,14 +25,14 @@ default-features = false
 version = "0.5.4"
 default-features = false
 [dependencies.cfg-if]
-version = "0.1"
+version = "0.1.10"
 [dependencies.ascii]
 version = "1.0.0"
 default-features = false
 optional = true
 
 [features]
-default = []#["std"]
+default = ["std"]
 std = []
 doctest = []
 
