@@ -18,6 +18,11 @@ test-stable:
   - cargo test --features ascii --features doctest --doc --verbose --jobs 1
   - cargo test --features ascii --features doctest --doc --verbose --jobs 1 --release
 
+  - cargo test --features ascii --no-default-features --tests --verbose --jobs 1
+  - cargo test --features ascii --no-default-features --tests --verbose --jobs 1 --release
+  - cargo test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
+  - cargo test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
+
 test-nightly:
   image: 'rustlang/rust:nightly'
   script:
@@ -36,3 +41,8 @@ test-nightly:
   - cargo +nightly test --features ascii --tests --verbose --jobs 1 --release
   - cargo +nightly test --features ascii --features doctest --doc --verbose --jobs 1
   - cargo +nightly test --features ascii --features doctest --doc --verbose --jobs 1 --release
+
+  - cargo +nightly test --features ascii --no-default-features --tests --verbose --jobs 1
+  - cargo +nightly test --features ascii --no-default-features --tests --verbose --jobs 1 --release
+  - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
+  - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
