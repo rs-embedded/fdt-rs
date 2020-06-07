@@ -284,6 +284,12 @@ impl<'a> DevTree<'a> {
         iters::DevTreeIter::new(self)
     }
 
+    /// Returns an iterator over objects within the [`DevTreeItem`] enum
+    #[inline]
+    pub fn root(&self) -> Option<DevTreeNode> {
+        self.nodes().next()
+    }
+
     /// Map the supplied predicate over the [`DevTreeItem`] enum.
     ///
     /// If the predicate returns `true`, Some(([`DevTreeItem`], [`iters::DevTreeIter`])) will be returned.
@@ -367,6 +373,13 @@ impl<'a> DevTree<'a> {
     {
         iters::DevTreeNodeIter::new(self).find(predicate)
     }
+
+    /// Returns the first [`DevTreeNode`] object with the provided compatible device tree property
+    /// or `None` if none exists.
+    #[inline]
+    pub fn find_first_compatible_node(&'a self, string: &Str) -> Option<DevTreeNode<'a>> {
+        self.items().find_next_compatible_node(string)
+    }
 }
 
 /// An enum which contains either a [`DevTreeNode`] or a [`DevTreeProp`]
@@ -396,6 +409,38 @@ impl<'a> DevTreeNode<'a> {
     pub fn props(&'a self) -> iters::DevTreeNodePropIter<'a> {
         iters::DevTreeNodePropIter::new(self)
     }
+
+    /// Returns the next [`DevTreeNode`] object with the provided compatible device tree property
+    /// or `None` if none exists.
+    ///
+    /// # Example
+    ///
+    /// The following example iterates through all nodes with compatible value "virtio,mmio"
+    /// and prints each node's name. (Slight modification of this example is required if using
+    /// the "ascii" feature.)
+    ///
+    /// ```
+    /// # #[cfg(not(feature = "ascii"))]
+    /// # {
+    /// # let mut devtree = fdt_rs::doctest::get_devtree();
+    /// let compat = "virtio,mmio";
+    /// # let mut count = 0;
+    /// if let Some(mut cur) = devtree.root() {
+    ///     while let Some(node) = cur.find_next_compatible_node(compat) {
+    ///         println!("{}", node.name()?);
+    ///         # count += 1;
+    ///         # assert!(node.name()?.starts_with("virtio_mmio@1000"));
+    ///         cur = node;
+    ///     }
+    /// }
+    /// # assert!(count == 8);
+    /// # }
+    /// # Ok::<(), fdt_rs::DevTreeError>(())
+    /// ```
+    #[inline]
+    pub fn find_next_compatible_node(&self, string: &crate::Str) -> Option<DevTreeNode<'a>> {
+        self.parse_iter.find_next_compatible_node(string)
+    }
 }
 
 /// A handle to a [`DevTreeNode`]'s Device Tree Property
@@ -416,7 +461,7 @@ impl<'a> DevTreeProp<'a> {
     /// Returns the node which this property is attached to
     #[inline]
     #[must_use]
-    pub fn parent(&self) -> DevTreeNode {
+    pub fn parent(&self) -> DevTreeNode<'a> {
         self.parent_iter.clone().next_node().unwrap()
     }
 

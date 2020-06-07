@@ -131,6 +131,23 @@ impl<'a> DevTreeIter<'a> {
         None
     }
 
+    /// Returns the next [`DevTreeNode`] object with the provided compatible device tree property
+    /// or `None` if none exists.
+    #[inline]
+    pub fn find_next_compatible_node(&self, string: &crate::Str) -> Option<DevTreeNode<'a>> {
+        let iter = self.clone();
+        let mut iter = DevTreeNodeIter::from(iter);
+        if iter.next().is_some() {
+            let mut iter = DevTreePropIter::from(iter.0);
+            if let Some((compatible_prop, _)) = iter.find(|prop| unsafe {
+                Ok((prop.name()? == "compatible") && (prop.get_str(0)? == string))
+            }) {
+                return Some(compatible_prop.parent());
+            }
+        }
+        None
+    }
+
     // Inlined because higher-order interators may ignore results
     #[inline]
     fn next_devtree_token(&mut self) -> Result<Option<DevTreeItem<'a>>, DevTreeError> {

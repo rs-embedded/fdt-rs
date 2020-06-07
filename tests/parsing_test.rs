@@ -69,16 +69,19 @@ fn node_prop_iter() {
 }
 
 #[test]
-fn find_first_compatible() {
-    use fdt_rs::DevTreeItem;
+fn find_first_compatible_works_on_initial_node() {
     unsafe {
-        let blob = DevTree::new(FDT).unwrap();
-        // TODO
-        assert!(blob.find(|item| 
-            Ok(match item {
-                DevTreeItem::Prop(p) => p.name()? == "compatible",
-                _ => false,
-            })
-        ).is_some());
+        let fdt = DevTree::new(FDT).unwrap();
+        let node = fdt.find_first_compatible_node("riscv-virtio").unwrap();
+        assert!(node.name().unwrap() == ""); // Root node has no "name"
+    }
+}
+
+#[test]
+fn find_first_compatible_works_on_final_node() {
+    unsafe {
+        let fdt = DevTree::new(FDT).unwrap();
+        let node = fdt.find_first_compatible_node("riscv,clint0").unwrap();
+        assert!(node.name().unwrap() == "clint@2000000");
     }
 }
