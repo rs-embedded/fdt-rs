@@ -8,7 +8,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies.fdt-rs]
-version = "0.1"
+version = "0.2"
 ```
 
 and this to your crate root:
@@ -24,7 +24,7 @@ the default `std` feature. Use this in `Cargo.toml`:
 
 ```toml
 [dependencies.fdt-rs]
-version = "0.1"
+version = "0.2"
 default-features = false
 # features = ["ascii"]    # <--- Uncomment if you wish to use the ascii crate for str's
 ```
