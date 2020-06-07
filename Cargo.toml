@@ -34,4 +34,5 @@ optional = true
 [features]
 default = []#["std"]
 std = []
+doctest = []
 

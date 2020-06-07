@@ -35,25 +35,37 @@ Without this feature enabled, `str` references will be returned.
 
 ## Example
 
+The following example stashes a flattened device tree in memory, parses that
+device tree into a `fdt_rs::DevTree` object, searches the device tree for the
+first "ns16550a" compatible node, and if found prints that node's name.
+
 ```rust
 extern crate fdt_rs;
+use fdt_rs::*;
 
-// Initialize the devtree using raw an &[u8] array
-let devtree = unsafe {
+// Place a device tree image into the rust binary.
+// Align it at 32-byte boundaries by using a wrapper struct.
+#[repr(align(4))] struct _Wrapper<T>(T);
+pub const FDT: &[u8] = &_Wrapper(*include_bytes!("../tests/riscv64-virt.dtb")).0;
 
-    // Get the actual size of the device tree after reading its header.
-    let size = DevTree::read_totalsize(buf).unwrap();
-    let buf = buf[..size];
+fn main() {
+    // Initialize the devtree using raw an &[u8] array
+    let devtree = unsafe {
 
-    // Create the device tree handle
-    DevTree::new(buf).unwrap()
-}
+        // Get the actual size of the device tree after reading its header.
+        let size = DevTree::read_totalsize(FDT).unwrap();
+        let buf = &FDT[..size];
 
-// Print the name of the UART compatible node
-if let Some((compatible_prop, _)) = devtree.find_prop(
-        |prop|
-            (prop.name()? == "compatible") && (p.get_str(0)? == "ns16550a")) {
+        // Create the device tree handle
+        DevTree::new(buf).unwrap()
+    };
 
-    println!(compatible_prop.parent().name()?);
+    // Find the first "ns16550a" compatible node within the device tree.
+    // If found, print the name of that node (inlcuding unit address).
+    if let Some((compatible_prop, _)) = devtree.find_prop(|prop| unsafe {
+        Ok((prop.name()? == "compatible") && (prop.get_str(0)? == "ns16550a"))
+        }) {
+        println!("{}", compatible_prop.parent().name().unwrap());
+    }
 }
 ```

@@ -26,6 +26,7 @@
 //!
 #![deny(clippy::all, clippy::cargo)]
 #![allow(clippy::as_conversions)]
+#![feature(external_doc)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
@@ -127,6 +128,7 @@ pub struct DevTree<'a> {
     buf: &'a [u8],
 }
 
+
 impl<'a> DevTree<'a> {
     pub const MIN_HEADER_SIZE: usize = size_of::<fdt_header>();
     /// Verify the magic header of a Device Tree buffer
@@ -162,9 +164,16 @@ impl<'a> DevTree<'a> {
     /// # Example
     ///
     /// ```
-    /// let size = DevTree::read_totalsize(buf).unwrap();
-    /// let buf = buf[..size];
-    /// let dt = DevTree::new(buf).unwrap();
+    /// # use fdt_rs::*;
+    /// # let buf = fdt_rs::doctest::FDT;
+    /// // Data is re-interpreted as a device tree, this is unsafe.
+    /// // See safety section
+    /// unsafe {
+    ///     let size = DevTree::read_totalsize(buf)?;
+    ///     let buf = &buf[..size];
+    ///     let dt = DevTree::new(buf)?;
+    /// }
+    /// # Ok::<(), fdt_rs::DevTreeError>(())
     /// ```
     ///
     /// # Safety
@@ -283,26 +292,31 @@ impl<'a> DevTree<'a> {
     /// # Example
     ///
     /// ```
-    /// fn is_uart_compatible(item: &DevTreeItem) -> Bool {
-    ///     match item {
-    ///         DevTreeItem::Prop(p) => {
-    ///         (p.name().unwrap() == "compatible") && p.get_str(0) == "ns16550a")
-    ///         },
-    ///         _ => false,
+    /// # use fdt_rs::*;
+    /// # let mut devtree = fdt_rs::doctest::get_devtree();
+    /// fn is_uart_compatible(item: &DevTreeItem) -> Result<bool, DevTreeError> {
+    ///     unsafe {
+    ///         match item {
+    ///             DevTreeItem::Prop(p) => {
+    ///                 Ok((p.name()? == "compatible") && (p.get_str(0)? == "ns16550a"))
+    ///             },
+    ///             _ => Ok(false),
+    ///         }
     ///     }
     /// }
     ///
-    /// let devtree = DevTree::new(buf).unwrap();
-    ///
     /// // Print the names of all compatible uarts
-    /// if let Some((compatible_prop, mut iter)) = devtree.find(is_uart_compatible) {
-    ///     println!(compatible_prop.parent().name()?);
-    /// }
+    /// if let Some((DevTreeItem::Prop(compatible_prop), mut iter)) = devtree.find(is_uart_compatible) {
+    ///     println!("{}", compatible_prop.parent().name()?);
+    ///     # assert!(compatible_prop.parent().name()? == "uart@10000000");
     ///
-    /// // Continue the search and keep printing their names.
-    /// while let Some((compatible_prop, mut iter)) = iter.find(is_uart_compatible) {
-    ///     println!(compatible_prop.parent().name()?);
+    ///     // Continue the search and keep printing their names.
+    ///     while let Some((DevTreeItem::Prop(compatible_prop), mut iter)) = iter.find(is_uart_compatible) {
+    ///         # assert!(false, "Found uart node that should not have existed.");
+    ///         println!("{}", compatible_prop.parent().name()?);
+    ///     }
     /// }
+    /// # Ok::<(), fdt_rs::DevTreeError>(())
     /// ```
     ///
     #[inline]
@@ -565,5 +579,27 @@ impl<'a> DevTreeProp<'a> {
         }
         // For some reason infinite for loops need unreachable.
         unreachable!();
+    }
+}
+
+
+// Include the readme for doctests
+// https://doc.rust-lang.org/rustdoc/documentation-tests.html#include-items-only-when-collecting-doctests
+#[doc(include="../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
+
+// When the doctest feature is enabled, add these utility functions.
+#[cfg(feature = "doctest")]
+pub mod doctest {
+    use crate::*;
+
+    #[repr(align(4))] struct _Wrapper<T>(T);
+    pub const FDT: &[u8] = &_Wrapper(*include_bytes!("../tests/riscv64-virt.dtb")).0;
+
+    pub fn get_devtree() -> DevTree<'static> {
+        unsafe {
+            DevTree::new(FDT).unwrap()
+        }
     }
 }
