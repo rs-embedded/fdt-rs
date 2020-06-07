@@ -31,8 +31,10 @@ version = "1.0.0"
 default-features = false
 optional = true
 
+[build-dependencies]
+rustc_version = "0.2"
+
 [features]
 default = ["std"]
 std = []
 doctest = []
-

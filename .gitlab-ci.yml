@@ -17,3 +17,21 @@ test:
   - cargo test --features ascii --tests --verbose --jobs 1 --release
   - cargo test --features ascii --features doctest --doc --verbose --jobs 1
   - cargo test --features ascii --features doctest --doc --verbose --jobs 1 --release
+
+test-nightly:
+  script:
+  - rustc +nightly --version && cargo +nightly --version      # Print version info for debugging
+  - cargo +nighly test --tests --verbose --jobs 1
+  - cargo +nighly test --tests --verbose --jobs 1 --release
+  - cargo +nighly test --features doctest --doc --verbose --jobs 1
+  - cargo +nighly test --features doctest --doc --verbose --jobs 1 --release
+
+  - cargo +nighly test --no-default-features --tests --verbose --jobs 1
+  - cargo +nighly test --no-default-features --tests --verbose --jobs 1 --release
+  - cargo +nighly test --no-default-features --features doctest --doc --verbose --jobs 1
+  - cargo +nighly test --no-default-features --features doctest --doc --verbose --jobs 1 --release
+
+  - cargo +nighly test --features ascii --tests --verbose --jobs 1
+  - cargo +nighly test --features ascii --tests --verbose --jobs 1 --release
+  - cargo +nighly test --features ascii --features doctest --doc --verbose --jobs 1
+  - cargo +nighly test --features ascii --features doctest --doc --verbose --jobs 1 --release

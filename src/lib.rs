@@ -26,7 +26,9 @@
 //!
 #![deny(clippy::all, clippy::cargo)]
 #![allow(clippy::as_conversions)]
-#![feature(external_doc)]
+
+// Test the readme if using nightly.
+#![cfg_attr(RUSTC_IS_NIGHTLY, feature(external_doc))]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "std")]
@@ -582,17 +584,16 @@ impl<'a> DevTreeProp<'a> {
     }
 }
 
-
-// Include the readme for doctests
-// https://doc.rust-lang.org/rustdoc/documentation-tests.html#include-items-only-when-collecting-doctests
-#[doc(include="../README.md")]
-#[cfg(doctest)]
-pub struct ReadmeDoctests;
-
 // When the doctest feature is enabled, add these utility functions.
 #[cfg(feature = "doctest")]
 pub mod doctest {
     use crate::*;
+
+    // Include the readme for doctests
+    // https://doc.rust-lang.org/rustdoc/documentation-tests.html#include-items-only-when-collecting-doctests
+    #[cfg(RUSTC_IS_NIGHTLY)]
+    #[doc(include="../README.md")]
+    pub struct ReadmeDoctests;
 
     #[repr(align(4))] struct _Wrapper<T>(T);
     pub const FDT: &[u8] = &_Wrapper(*include_bytes!("../tests/riscv64-virt.dtb")).0;
