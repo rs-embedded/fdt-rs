@@ -80,10 +80,10 @@ fn find_first_compatible() {
         let blob = DevTree::new(FDT).unwrap();
         // TODO
         assert!(blob.find(|item| 
-            match item {
-                DevTreeItem::Prop(p) => p.name().unwrap() == "compatible",
+            Ok(match item {
+                DevTreeItem::Prop(p) => p.name()? == "compatible",
                 _ => false,
-            }
+            })
         ).is_some());
     }
 }

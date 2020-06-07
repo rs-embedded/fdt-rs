@@ -121,10 +121,10 @@ impl<'a> DevTreeIter<'a> {
     #[inline]
     pub fn find<F>(&mut self, predicate: F) -> Option<(DevTreeItem<'a>, Self)>
     where
-        F: Fn(&DevTreeItem) -> bool,
+        F: Fn(&DevTreeItem) -> Result<bool, DevTreeError>,
     {
         while let Some(i) = self.next() {
-            if predicate(&i) {
+            if let Ok(true) = predicate(&i) {
                 return Some((i, self.clone()));
             }
         }
@@ -226,10 +226,10 @@ impl<'a> DevTreeNodeIter<'a> {
     #[inline]
     pub fn find<F>(&mut self, predicate: F) -> Option<(DevTreeNode<'a>, Self)>
     where
-        F: Fn(&DevTreeNode) -> bool,
+        F: Fn(&DevTreeNode) -> Result<bool, DevTreeError>,
     {
         while let Some(i) = self.next() {
-            if predicate(&i) {
+            if let Ok(true) = predicate(&i) {
                 return Some((i, self.clone()));
             }
         }
@@ -263,10 +263,10 @@ impl<'a> DevTreePropIter<'a> {
     #[inline]
     pub fn find<F>(&mut self, predicate: F) -> Option<(DevTreeProp<'a>, Self)>
     where
-        F: Fn(&DevTreeProp) -> bool,
+        F: Fn(&DevTreeProp) -> Result<bool, DevTreeError>,
     {
         while let Some(i) = self.next() {
-            if predicate(&i) {
+            if let Ok(true) = predicate(&i) {
                 return Some((i, self.clone()));
             }
         }

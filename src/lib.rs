@@ -308,7 +308,7 @@ impl<'a> DevTree<'a> {
     #[inline]
     pub fn find<F>(&'a self, predicate: F) -> Option<(DevTreeItem<'a>, iters::DevTreeIter<'a>)>
     where
-        F: Fn(&DevTreeItem) -> bool,
+        F: Fn(&DevTreeItem) -> Result<bool, DevTreeError>,
     {
         iters::DevTreeIter::new(self).find(predicate)
     }
@@ -321,19 +321,21 @@ impl<'a> DevTree<'a> {
     /// # Example
     ///
     /// ```
-    /// let devtree = DevTree::new(buf).unwrap();
-    ///
-    /// // Print the name of a compatible node
-    /// if let Some((compatible_prop, _)) = devtree.find_prop(|prop|
-    ///     (prop.name == "compatible") && (p.get_str(0) == "ns16550a")) {
-    ///     println!(compatible_prop.parent().name()?);
+    /// # let mut devtree = fdt_rs::doctest::get_devtree();
+    /// // Print the first "ns16550a" compatible node.
+    /// if let Some((compatible_prop, _)) = devtree.find_prop(|prop| unsafe {
+    ///     Ok((prop.name()? == "compatible") && (prop.get_str(0)? == "ns16550a"))
+    ///     }) {
+    ///     println!("{}", compatible_prop.parent().name()?);
+    ///     # assert!(compatible_prop.parent().name()? == "uart@10000000");
     /// }
+    /// # Ok::<(), fdt_rs::DevTreeError>(())
     /// ```
     ///
     #[inline]
     pub fn find_prop<F>(&'a self, predicate: F) -> Option<(DevTreeProp<'a>, iters::DevTreePropIter<'a>)>
     where
-        F: Fn(&DevTreeProp) -> bool,
+        F: Fn(&DevTreeProp) -> Result<bool, DevTreeError>,
     {
         iters::DevTreePropIter::new(self).find(predicate)
     }
@@ -345,7 +347,7 @@ impl<'a> DevTree<'a> {
     #[inline]
     pub fn find_node<F>(&'a self, predicate: F) -> Option<(DevTreeNode<'a>, iters::DevTreeNodeIter<'a>)>
     where
-        F: Fn(&DevTreeNode) -> bool,
+        F: Fn(&DevTreeNode) -> Result<bool, DevTreeError>,
     {
         iters::DevTreeNodeIter::new(self).find(predicate)
     }
