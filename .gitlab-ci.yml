@@ -1,0 +1,19 @@
+image: 'rust:latest'
+
+test:
+  script:
+  - rustc --version && cargo --version      # Print version info for debugging
+  - cargo test --tests --verbose --jobs 1
+  - cargo test --tests --verbose --jobs 1 --release
+  - cargo test --features doctest --doc --verbose --jobs 1
+  - cargo test --features doctest --doc --verbose --jobs 1 --release
+
+  - cargo test --no-default-features --tests --verbose --jobs 1
+  - cargo test --no-default-features --tests --verbose --jobs 1 --release
+  - cargo test --no-default-features --features doctest --doc --verbose --jobs 1
+  - cargo test --no-default-features --features doctest --doc --verbose --jobs 1 --release
+
+  - cargo test --features ascii --tests --verbose --jobs 1
+  - cargo test --features ascii --tests --verbose --jobs 1 --release
+  - cargo test --features ascii --features doctest --doc --verbose --jobs 1
+  - cargo test --features ascii --features doctest --doc --verbose --jobs 1 --release
