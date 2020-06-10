@@ -112,6 +112,7 @@ fn find_all_compatible() {
         let compat = str_from_static("virtio,mmio");
         let exp = str_from_static("virtio_mmio@1000");
         let mut count = 0;
+        let exp_count = 8;
 
         if let Some(mut cur) = devtree.root() {
             while let Some(node) = cur.find_next_compatible_node(compat) {
@@ -120,8 +121,9 @@ fn find_all_compatible() {
                 // (ascii doesn't have startswith)
                 assert!(node.name().unwrap()[0..exp.len()] == *exp);
                 cur = node;
+                assert!(count <= exp_count);
             }
         }
-        assert!(count == 8);
+        assert!(count == exp_count);
     }
 }
