@@ -1,14 +1,17 @@
 [package]
 name = "fdt-rs"
-version = "0.2.0"
+version = "0.4.0"
 description = "A flattened device tree parser for embedded no-std environments"
 authors = ["Sean Wilson <spwilson27@gmail.com>"]
 license = "MIT"
 edition = "2018"
-repository = "https://gitlab.com/ertos/fdt-rs"
+repository = "https://github.com/rs-embedded/fdt-rs"
 readme = "README.md"
 categories = ["embedded", "parsing", "os", "no-std", "memory-management"]
 keywords = ["Device", "Tree", "DTB",  "FDT", "no-std"]
+
+[lib]
+doctest = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -24,12 +27,15 @@ default-features = false
 [dependencies.memoffset]
 version = "0.5.4"
 default-features = false
-[dependencies.cfg-if]
-version = "0.1.10"
-[dependencies.ascii]
-version = "1.0.0"
+[dependencies.fallible-iterator]
+version = "0.2"
 default-features = false
-optional = true
+[dependencies.static_assertions]
+version = "1"
+default-features = false
+[dependencies.unsafe_unwrap]
+version = "0.1"
+default-features = false
 
 [build-dependencies]
 rustc_version = "0.2"
@@ -37,4 +43,5 @@ rustc_version = "0.2"
 [features]
 default = ["std"]
 std = []
+alloc = []
 doctest = []

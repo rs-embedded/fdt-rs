@@ -1,0 +1,6 @@
+- Provide more information with errors:
+   - Alignment
+   - Context of parse errors
+- Provide errors with iterators
+
+- Flip lifetimes, order longest to shortest.

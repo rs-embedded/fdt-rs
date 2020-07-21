@@ -1,79 +1,69 @@
+image: registry.gitlab.com/spwilson2/rust-sccache
+
+.test-template: &test-template
+  cache:
+    key: build-cache-$RUST_TOOLCHAIN
+    paths: 
+      - .cargo/
+      - .cache/
+      - target/
+  before_script:
+    - export RUST_BACKTRACE=1
+    - rustup default "$RUST_TOOLCHAIN"
+    - rustup --version
+    - rustc --version
+    - cargo --version
+  script:
+    - cargo test --tests --jobs 1
+    - cargo test --tests --jobs 1 --release
+    - cargo test --features doctest --doc --jobs 1
+    - cargo test --features doctest --doc --jobs 1 --release
+    - cargo test --no-default-features --tests --jobs 1
+    - cargo test --no-default-features --tests --jobs 1 --release
 
 test-stable:
-  image: 'rust:latest'
-  script:
-  - rustc --version && cargo --version      # Print version info for debugging
-  - cargo test --tests --verbose --jobs 1
-  - cargo test --tests --verbose --jobs 1 --release
-  - cargo test --features doctest --doc --verbose --jobs 1
-  - cargo test --features doctest --doc --verbose --jobs 1 --release
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN:  stable
 
-  - cargo test --no-default-features --tests --verbose --jobs 1
-  - cargo test --no-default-features --tests --verbose --jobs 1 --release
-  - cargo test --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo test --no-default-features --features doctest --doc --verbose --jobs 1 --release
-
-  - cargo test --features ascii --tests --verbose --jobs 1
-  - cargo test --features ascii --tests --verbose --jobs 1 --release
-  - cargo test --features ascii --features doctest --doc --verbose --jobs 1
-  - cargo test --features ascii --features doctest --doc --verbose --jobs 1 --release
-
-  - cargo test --features ascii --no-default-features --tests --verbose --jobs 1
-  - cargo test --features ascii --no-default-features --tests --verbose --jobs 1 --release
-  - cargo test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
-  cache:
-    key: stable-build-cache
+test-beta:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN:  beta
 
 test-nightly:
-  image: 'rustlang/rust:nightly'
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN:  nightly
+
+test-coverage:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN: stable
   script:
-  - rustc +nightly --version && cargo +nightly --version      # Print version info for debugging
-  - cargo +nightly test --tests --verbose --jobs 1
-  - cargo +nightly test --tests --verbose --jobs 1 --release
-  - cargo +nightly test --features doctest --doc --verbose --jobs 1
-  - cargo +nightly test --features doctest --doc --verbose --jobs 1 --release
+    - cargo install cargo-tarpaulin
+    - cargo tarpaulin --verbose
 
-  - cargo +nightly test --no-default-features --tests --verbose --jobs 1
-  - cargo +nightly test --no-default-features --tests --verbose --jobs 1 --release
-  - cargo +nightly test --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo +nightly test --no-default-features --features doctest --doc --verbose --jobs 1 --release
-
-  - cargo +nightly test --features ascii --tests --verbose --jobs 1
-  - cargo +nightly test --features ascii --tests --verbose --jobs 1 --release
-  - cargo +nightly test --features ascii --features doctest --doc --verbose --jobs 1
-  - cargo +nightly test --features ascii --features doctest --doc --verbose --jobs 1 --release
-
-  - cargo +nightly test --features ascii --no-default-features --tests --verbose --jobs 1
-  - cargo +nightly test --features ascii --no-default-features --tests --verbose --jobs 1 --release
-  - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
-  cache:
-    key: nightly-build-cache
-    paths:
-    - target/
-
-docs:
-  image: 'rust:latest'
+test-fmt:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN: stable
   script:
-  - rustc --version && cargo --version
-  - cargo doc --no-deps
-  cache:
-    key: stable-build-cache
+    - rustup component add rustfmt
+    - cargo fmt --all --verbose -- --check
 
-clippy:
-  image: 'rust:latest'
-  before_script:
-  - rustup component add clippy
+test-clippy:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN: stable
   script:
-  - cargo clippy -- -D warnings
-  - cargo clippy --features ascii -- -D warnings
-  - cargo clippy --no-default-features -- -D warnings
-  - cargo clippy --features ascii --no-default-features -- -D warnings
-  cache:
-    key: stable-build-cache
+    - rustup component add clippy
+    - cargo clippy -- -D warnings
+    - cargo clippy --no-default-features -- -D warnings
 
-cache:
-  key: stable-build-cache
-  paths:
-    - target/
+test-docs:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN: nightly
+  script:
+    - cargo doc --no-deps
