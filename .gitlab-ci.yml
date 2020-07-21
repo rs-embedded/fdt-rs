@@ -27,7 +27,6 @@ test-coverage:
 test-nightly:
   image: 'rustlang/rust:nightly'
   script:
-  - cargo install cargo-tarpaulin -f
   - rustc +nightly --version && cargo +nightly --version      # Print version info for debugging
   - cargo +nightly test --tests --verbose --jobs 1
   - cargo +nightly test --tests --verbose --jobs 1 --release
