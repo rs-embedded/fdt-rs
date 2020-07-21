@@ -1,5 +1,11 @@
 # fdt-rs
 
+[![crates.io](https://img.shields.io/crates/v/fdt-rs)](https://crates.io/crates/fdt-rs)
+[![](https://img.shields.io/crates/d/fdt-rs.svg)](https://crates.io/crates/fdt-rs)
+[![](https://docs.rs/fdt-rs/badge.svg)](https://docs.rs/fdt-rs/)
+[![](https://gitlab.com/ertos/fdt-rs/badges/master/pipeline.svg?key_text=build)](https://gitlab.com/ertos/fdt-rs)
+[![](https://gitlab.com/ertos/fdt-rs/badges/master/coverage.svg?style=flat)](https://gitlab.com/ertos/fdt-rs)
+
 A Flattened Device Tree parser for embedded no-std environments
 
 ## Usage
@@ -26,22 +32,18 @@ the default `std` feature. Use this in `Cargo.toml`:
 [dependencies.fdt-rs]
 version = "0.2"
 default-features = false
-# features = ["ascii"]    # <--- Uncomment if you wish to use the ascii crate for str's
 ```
-
-The `"ascii"` feature will configure the `Str` type returned by string accessor
-methods to be of type `AsciiStr` provided by the [ascii crate](https://docs.rs/ascii/1.0.0/ascii/).
-Without this feature enabled, `str` references will be returned.
 
 ## Example
 
 The following example stashes a flattened device tree in memory, parses that
-device tree into a `fdt_rs::DevTree` object, searches the device tree for the
-first "ns16550a" compatible node, and if found prints that node's name.
+device tree into a `fdt_rs::DevTree` object, searches the device tree for
+"ns16550a" compatible nodes, and (if found) prints each nodes' name.
 
 ```rust
 extern crate fdt_rs;
-use fdt_rs::*;
+use fdt_rs::prelude::*;
+use fdt_rs::base::*;
 
 // Place a device tree image into the rust binary and
 // align it to a 32-byte boundary by using a wrapper struct.
@@ -60,22 +62,11 @@ fn main() {
         DevTree::new(buf).unwrap()
     };
 
-    // Find the first "ns16550a" compatible node within the device tree.
-    // If found, print the name of that node (including unit address).
-    if let Some(node) = devtree.find_first_compatible_node("ns16550a") {
+    // Iterate through all "ns16550a" compatible nodes within the device tree.
+    // If found, print the name of each node (including unit address).
+    let mut node_iter = devtree.compatible_nodes("ns16550a");
+    while let Some(node) = node_iter.next().unwrap() {
         println!("{}", node.name().unwrap());
-    }
-
-
-    // Use our own custom search method to find bootargs
-    //
-    // Find a node with a custom zero-length property "company,secret"
-    if let Some((compatible_prop, _)) = devtree.find_prop(
-            |prop|
-                Ok((prop.name()? == "bootargs"))) {
-        unsafe {
-            println!("{}", compatible_prop.get_str().unwrap());
-        }
     }
 }
 

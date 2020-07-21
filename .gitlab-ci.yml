@@ -1,4 +1,3 @@
-
 test-stable:
   image: 'rust:latest'
   script:
@@ -10,24 +9,25 @@ test-stable:
 
   - cargo test --no-default-features --tests --verbose --jobs 1
   - cargo test --no-default-features --tests --verbose --jobs 1 --release
-  - cargo test --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo test --no-default-features --features doctest --doc --verbose --jobs 1 --release
 
-  - cargo test --features ascii --tests --verbose --jobs 1
-  - cargo test --features ascii --tests --verbose --jobs 1 --release
-  - cargo test --features ascii --features doctest --doc --verbose --jobs 1
-  - cargo test --features ascii --features doctest --doc --verbose --jobs 1 --release
+  # Disabled, we use some std utilites to enable doctests
+  #- cargo test --no-default-features --features doctest --doc --verbose --jobs 1
+  #- cargo test --no-default-features --features doctest --doc --verbose --jobs 1 --release
+  cache:
+    key: stable-build-cache
 
-  - cargo test --features ascii --no-default-features --tests --verbose --jobs 1
-  - cargo test --features ascii --no-default-features --tests --verbose --jobs 1 --release
-  - cargo test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
+test-coverage:
+  image: 'rust:latest'
+  script:
+  - cargo install cargo-tarpaulin -f
+  - cargo tarpaulin --verbose
   cache:
     key: stable-build-cache
 
 test-nightly:
   image: 'rustlang/rust:nightly'
   script:
+  - cargo install cargo-tarpaulin -f
   - rustc +nightly --version && cargo +nightly --version      # Print version info for debugging
   - cargo +nightly test --tests --verbose --jobs 1
   - cargo +nightly test --tests --verbose --jobs 1 --release
@@ -36,18 +36,10 @@ test-nightly:
 
   - cargo +nightly test --no-default-features --tests --verbose --jobs 1
   - cargo +nightly test --no-default-features --tests --verbose --jobs 1 --release
-  - cargo +nightly test --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo +nightly test --no-default-features --features doctest --doc --verbose --jobs 1 --release
+  # Disabled, we use some std utilites to enable doctests
+  #- cargo +nightly test --no-default-features --features doctest --doc --verbose --jobs 1
+  #- cargo +nightly test --no-default-features --features doctest --doc --verbose --jobs 1 --release
 
-  - cargo +nightly test --features ascii --tests --verbose --jobs 1
-  - cargo +nightly test --features ascii --tests --verbose --jobs 1 --release
-  - cargo +nightly test --features ascii --features doctest --doc --verbose --jobs 1
-  - cargo +nightly test --features ascii --features doctest --doc --verbose --jobs 1 --release
-
-  - cargo +nightly test --features ascii --no-default-features --tests --verbose --jobs 1
-  - cargo +nightly test --features ascii --no-default-features --tests --verbose --jobs 1 --release
-  - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1
-  - cargo +nightly test --features ascii --no-default-features --features doctest --doc --verbose --jobs 1 --release
   cache:
     key: nightly-build-cache
     paths:
@@ -67,9 +59,7 @@ clippy:
   - rustup component add clippy
   script:
   - cargo clippy -- -D warnings
-  - cargo clippy --features ascii -- -D warnings
   - cargo clippy --no-default-features -- -D warnings
-  - cargo clippy --features ascii --no-default-features -- -D warnings
   cache:
     key: stable-build-cache
 

@@ -1,12 +1,13 @@
-//! This module provides definitions of structures and enums from the Device Tree Specification.
+//! Definitions of structs and enums from the device tree specification.
 use endian_type::types::{u32_be, u64_be};
 use num_derive::FromPrimitive;
 
 /// Magic number used to denote the beginning of a device tree (as a native machine number).
 pub const FDT_MAGIC: u32 = 0xd00d_feed;
+/// Maximum length of a device tree node name (including null byte)
 pub const MAX_NODE_NAME_LEN: usize = 31;
 
-/// Definition of the parsed phandle (a native machine number)
+/// Definition of the parsed phandle as a native machine number
 pub type Phandle = u32;
 
 /// An enumeration of the tokens used to separate sections within the `dt_struct` section of the FDT.

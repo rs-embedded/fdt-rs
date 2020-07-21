@@ -24,12 +24,11 @@ default-features = false
 [dependencies.memoffset]
 version = "0.5.4"
 default-features = false
-[dependencies.cfg-if]
-version = "0.1.10"
-[dependencies.ascii]
-version = "1.0.0"
-default-features = false
-optional = true
+
+[dependencies]
+unsafe_unwrap = "0.1.0"
+static_assertions = "1"
+fallible-iterator = "0.2"
 
 [build-dependencies]
 rustc_version = "0.2"
@@ -37,4 +36,12 @@ rustc_version = "0.2"
 [features]
 default = ["std"]
 std = []
+alloc = []
 doctest = []
+
+[dev-dependencies.criterion]
+version = "0.3"
+
+[[bench]]
+name = "parsing_test"
+harness = false
