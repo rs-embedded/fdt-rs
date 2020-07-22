@@ -222,6 +222,31 @@ pub mod index_tests {
         test_index_dfs(&idx);
     }
 
+    // Test that iteration over children works as expected.
+    #[test]
+    fn verify_root_children_iteration() {
+        let idx = get_fdt_index();
+        let root = idx.index.root();
+        assert_eq!(root.children().count(), 18);
+    }
+
+    // Test that comparision of nodes works as expected.
+    #[test]
+    fn verify_root_children_comparisions() {
+        let idx = get_fdt_index();
+        let root = idx.index.root();
+
+        let mut prev = None;
+        for child in root.children() {
+            assert!(root.is_parent_of(&child));
+            if let Some(prev_child) = &prev {
+                assert!(child.is_sibling_of(prev_child));
+                assert!(prev_child != &child);
+            }
+            prev = Some(child);
+        }
+    }
+
     // Test iteration over the root nodes props.
     #[test]
     fn root_prop_iteration() {

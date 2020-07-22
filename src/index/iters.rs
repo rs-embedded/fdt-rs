@@ -80,9 +80,28 @@ impl<'s, 'a, 'i: 'a, 'dt: 'i> Iterator for DevTreeIndexCompatibleNodeIter<'s, 'a
 
 impl<'a, 'i: 'a, 'dt: 'i> DevTreeIndexIter<'a, 'i, 'dt> {
     pub(super) fn new(index: &'a DevTreeIndex<'i, 'dt>) -> Self {
-        let mut this = Self::from_node(index.root());
-        this.initial_node_returned = false;
-        this
+        Self::from_node_include(index.root())
+    }
+
+    pub(crate) fn new_dead_iter(index: &'a DevTreeIndex<'i, 'dt>) -> Self {
+        DevTreeIndexIter {
+            index,
+            node: None,
+            prop_idx: 0,
+            initial_node_returned: false,
+        }
+    }
+
+    /// Create an iterator from the current node.
+    ///
+    /// The current node will be returned by the iterator.
+    pub fn from_node_include(node: DevTreeIndexNode<'a, 'i, 'dt>) -> Self {
+        Self {
+            index: node.index(),
+            initial_node_returned: false,
+            node: Some(node.node),
+            prop_idx: 0,
+        }
     }
 
     pub fn from_node(node: DevTreeIndexNode<'a, 'i, 'dt>) -> Self {

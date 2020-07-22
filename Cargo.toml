@@ -1,6 +1,6 @@
 [package]
 name = "fdt-rs"
-version = "0.3.0"
+version = "0.3.1"
 description = "A flattened device tree parser for embedded no-std environments"
 authors = ["Sean Wilson <spwilson27@gmail.com>"]
 license = "MIT"

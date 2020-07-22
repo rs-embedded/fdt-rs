@@ -4,9 +4,9 @@
 use crate::index::DevTreeIndex;
 
 use crate::priv_util::SliceReadError;
-use core::str::Utf8Error;
 use core::fmt;
 use core::result;
+use core::str::Utf8Error;
 
 /// An error describe parsing problems when creating device trees.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,11 +53,18 @@ impl fmt::Display for DevTreeError {
             DevTreeError::InvalidParameter(err) => write!(f, "Invalid paramter supplied: {}", err),
             DevTreeError::InvalidOffset => write!(f, "Invalid offset provided."),
 
-            DevTreeError::InvalidMagicNumber => write!(f, "Device tree contains invalid magic number."),
+            DevTreeError::InvalidMagicNumber => {
+                write!(f, "Device tree contains invalid magic number.")
+            }
             DevTreeError::ParseError => write!(f, "Failed to parse device tree. It is invalid."),
-            DevTreeError::StrError(utf_err) => write!(f, "Failed to parse device tree string: {}", utf_err),
+            DevTreeError::StrError(utf_err) => {
+                write!(f, "Failed to parse device tree string: {}", utf_err)
+            }
 
-            DevTreeError::NotEnoughMemory => write!(f, "Unable to fit device tree index into the provided buffer."),
+            DevTreeError::NotEnoughMemory => write!(
+                f,
+                "Unable to fit device tree index into the provided buffer."
+            ),
         }
     }
 }

@@ -16,6 +16,14 @@ pub struct DevTreeIndexProp<'a, 'i: 'a, 'dt: 'i> {
     prop: &'a DTIProp<'dt>,
 }
 
+impl<'a, 'i: 'a, 'dt: 'i> PartialEq for DevTreeIndexProp<'a, 'i, 'dt> {
+    fn eq(&self, other: &Self) -> bool {
+        self.index as *const DevTreeIndex == other.index as *const DevTreeIndex
+            && self.node as *const DTINode == other.node as *const DTINode
+            && self.prop as *const DTIProp == other.prop as *const DTIProp
+    }
+}
+
 impl<'r, 'a: 'r, 'i: 'a, 'dt: 'i> DevTreeIndexProp<'a, 'i, 'dt> {
     pub(super) fn new(
         index: &'a DevTreeIndex<'i, 'dt>,

@@ -1,7 +1,7 @@
 #[cfg(doc)]
-use crate::base::*;
-#[cfg(doc)]
 use crate::base::parse::ParsedTok;
+#[cfg(doc)]
+use crate::base::*;
 
 use core::mem::size_of;
 
@@ -13,8 +13,8 @@ use crate::spec::{fdt_header, FDT_MAGIC};
 use fallible_iterator::FallibleIterator;
 
 use super::iters::{
-    DevTreeCompatibleNodeIter, DevTreeIter, DevTreeNodeIter, DevTreePropIter,
-    DevTreeReserveEntryIter, DevTreeParseIter,
+    DevTreeCompatibleNodeIter, DevTreeIter, DevTreeNodeIter, DevTreeParseIter, DevTreePropIter,
+    DevTreeReserveEntryIter,
 };
 use super::DevTreeNode;
 
