@@ -1,5 +1,7 @@
 #[cfg(doc)]
 use crate::base::*;
+#[cfg(doc)]
+use crate::base::parse::ParsedTok;
 
 use core::mem::size_of;
 
@@ -12,7 +14,7 @@ use fallible_iterator::FallibleIterator;
 
 use super::iters::{
     DevTreeCompatibleNodeIter, DevTreeIter, DevTreeNodeIter, DevTreePropIter,
-    DevTreeReserveEntryIter,
+    DevTreeReserveEntryIter, DevTreeParseIter,
 };
 use super::DevTreeNode;
 
@@ -180,6 +182,12 @@ impl<'dt> DevTree<'dt> {
     /// Returns an iterator over objects within the [`DevTreeItem`] enum
     pub fn items(&self) -> DevTreeIter<'_, 'dt> {
         DevTreeIter::new(self)
+    }
+
+    /// Returns an iterator over low level parsing tokens, [`ParsedTok`].
+    #[must_use]
+    pub fn parse_iter(&self) -> DevTreeParseIter<'_, 'dt> {
+        DevTreeParseIter::new(self)
     }
 
     /// Returns the first [`DevTreeNode`] object with the provided compatible device tree property

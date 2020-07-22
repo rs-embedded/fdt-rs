@@ -10,6 +10,9 @@ use crate::base::{DevTree, DevTreeItem, DevTreeNode, DevTreeProp};
 use crate::error::{DevTreeError, Result};
 use crate::spec::fdt_reserve_entry;
 
+// Re-export the basic parse iterator.
+pub use super::parse::DevTreeParseIter;
+
 use fallible_iterator::FallibleIterator;
 
 /// An iterator over [`fdt_reserve_entry`] objects within the FDT.

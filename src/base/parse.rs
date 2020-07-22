@@ -121,7 +121,7 @@ pub struct DevTreeParseIter<'r, 'dt: 'r> {
 }
 
 impl<'r, 'dt: 'r> DevTreeParseIter<'r, 'dt> {
-    pub(crate) fn new(fdt: &'r DevTree<'dt>) -> Self {
+    pub fn new(fdt: &'r DevTree<'dt>) -> Self {
         Self {
             offset: fdt.off_dt_struct(),
             fdt,
