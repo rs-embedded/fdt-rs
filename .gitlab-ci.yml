@@ -14,6 +14,7 @@ setup-rustup:
   stage: setup
   script:
     - mkdir -p $CI_PROJECT_DIR
+    - rm -rf $CI_PROJECT_DIR/.cargo/cargo
     - mv /usr/local/cargo $CI_PROJECT_DIR/.cargo
     - ln -s $CI_PROJECT_DIR/.cargo/ /usr/local/cargo
     - rustup toolchain update stable
@@ -24,6 +25,7 @@ setup-rustup:
   stage: test
   before_script:
     - mkdir -p $CI_PROJECT_DIR
+    - rm -rf $CI_PROJECT_DIR/.cargo/cargo
     - mv /usr/local/cargo $CI_PROJECT_DIR/.cargo
     - ln -s $CI_PROJECT_DIR/.cargo/ /usr/local/cargo
     - export RUST_BACKTRACE=1
