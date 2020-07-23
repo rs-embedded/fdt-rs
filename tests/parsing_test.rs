@@ -104,6 +104,60 @@ fn nodes_iter() {
     }
 }
 
+// Test that comparision of props works as expected.
+#[test]
+fn verify_prop_comparisions() {
+    unsafe {
+        let blob = DevTree::new(FDT).unwrap();
+
+        let props_iter_1 = blob.props();
+        let props_iter_2 = blob.props();
+
+        let mut pair_iter = props_iter_1.zip(props_iter_2);
+        while let Some((prop_1, prop_2)) = pair_iter.next().unwrap() {
+            assert!(prop_1 == prop_2);
+        }
+
+        let mut props_iter_1 = blob.props();
+        let props_iter_2 = blob.props();
+
+        // Mess up the lock step iteration, every prop should be different
+        let _ = props_iter_1.next().unwrap();
+
+        let mut pair_iter = props_iter_1.zip(props_iter_2);
+        while let Some((prop_1, prop_2)) = pair_iter.next().unwrap() {
+            assert!(prop_1 != prop_2);
+        }
+    }
+}
+
+// Test that comparision of nodes works as expected.
+#[test]
+fn verify_node_comparisions() {
+    unsafe {
+        let blob = DevTree::new(FDT).unwrap();
+
+        let nodes_iter_1 = blob.nodes();
+        let nodes_iter_2 = blob.nodes();
+
+        let mut pair_iter = nodes_iter_1.zip(nodes_iter_2);
+        while let Some((node_1, node_2)) = pair_iter.next().unwrap() {
+            assert!(node_1 == node_2);
+        }
+
+        let mut nodes_iter_1 = blob.nodes();
+        let nodes_iter_2 = blob.nodes();
+
+        // Mess up the lock step iteration, every node should be different
+        let _ = nodes_iter_1.next().unwrap();
+
+        let mut pair_iter = nodes_iter_1.zip(nodes_iter_2);
+        while let Some((node_1, node_2)) = pair_iter.next().unwrap() {
+            assert!(node_1 != node_2);
+        }
+    }
+}
+
 #[test]
 fn node_prop_iter() {
     unsafe {

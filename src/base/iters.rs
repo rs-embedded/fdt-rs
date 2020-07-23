@@ -62,7 +62,7 @@ impl<'a, 'dt: 'a> Iterator for DevTreeReserveEntryIter<'a, 'dt> {
 }
 
 /// An iterator over all [`DevTreeItem`] objects.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreeIter<'a, 'dt: 'a> {
     /// Offset of the last opened Device Tree Node.
     /// This is used to set properties' parent DevTreeNode.
@@ -77,7 +77,7 @@ pub struct DevTreeIter<'a, 'dt: 'a> {
     pub(crate) fdt: &'a DevTree<'dt>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreeNodeIter<'a, 'dt: 'a>(pub DevTreeIter<'a, 'dt>);
 impl<'a, 'dt: 'a> FallibleIterator for DevTreeNodeIter<'a, 'dt> {
     type Item = DevTreeNode<'a, 'dt>;
@@ -87,7 +87,7 @@ impl<'a, 'dt: 'a> FallibleIterator for DevTreeNodeIter<'a, 'dt> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreePropIter<'a, 'dt: 'a>(pub DevTreeIter<'a, 'dt>);
 impl<'a, 'dt: 'a> FallibleIterator for DevTreePropIter<'a, 'dt> {
     type Error = DevTreeError;
@@ -97,7 +97,7 @@ impl<'a, 'dt: 'a> FallibleIterator for DevTreePropIter<'a, 'dt> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreeNodePropIter<'a, 'dt: 'a>(pub DevTreeIter<'a, 'dt>);
 impl<'a, 'dt: 'a> FallibleIterator for DevTreeNodePropIter<'a, 'dt> {
     type Error = DevTreeError;
@@ -107,7 +107,7 @@ impl<'a, 'dt: 'a> FallibleIterator for DevTreeNodePropIter<'a, 'dt> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreeCompatibleNodeIter<'s, 'a, 'dt: 'a> {
     pub iter: DevTreeIter<'a, 'dt>,
     pub string: &'s str,

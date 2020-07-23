@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use super::{DevTreeIndexNode, DevTreeIndexProp};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum DevTreeIndexItem<'a, 'i: 'a, 'dt: 'i> {
     Node(DevTreeIndexNode<'a, 'i, 'dt>),
     Prop(DevTreeIndexProp<'a, 'i, 'dt>),

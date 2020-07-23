@@ -2,13 +2,12 @@ use crate::prelude::*;
 
 use super::tree::DTINode;
 use super::{DevTreeIndex, DevTreeIndexItem, DevTreeIndexNode, DevTreeIndexProp};
-//use crate::error::{Result};
 
 /***********************************/
 /***********  Node Siblings  *******/
 /***********************************/
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreeIndexNodeSiblingIter<'a, 'i: 'a, 'dt: 'i>(DevTreeIndexIter<'a, 'i, 'dt>);
 
 impl<'a, 'i: 'a, 'dt: 'i> From<DevTreeIndexIter<'a, 'i, 'dt>>
@@ -39,7 +38,21 @@ pub struct DevTreeIndexIter<'a, 'i: 'a, 'dt: 'i> {
     initial_node_returned: bool,
 }
 
-#[derive(Clone)]
+impl<'a, 'i: 'a, 'dt: 'i> PartialEq for DevTreeIndexIter<'a, 'i, 'dt> {
+    fn eq(&self, other: &Self) -> bool {
+        let cmp = match (self.node, other.node) {
+            (Some(l), Some(r)) => l as *const DTINode == r as *const DTINode,
+            (None, None) => true,
+            _ => false,
+        };
+
+        cmp && self.index == other.index
+            && self.prop_idx == other.prop_idx
+            && self.initial_node_returned == other.initial_node_returned
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct DevTreeIndexNodeIter<'a, 'i: 'a, 'dt: 'i>(pub DevTreeIndexIter<'a, 'i, 'dt>);
 impl<'a, 'i: 'a, 'dt: 'i> Iterator for DevTreeIndexNodeIter<'a, 'i, 'dt> {
     type Item = DevTreeIndexNode<'a, 'i, 'dt>;
@@ -48,7 +61,7 @@ impl<'a, 'i: 'a, 'dt: 'i> Iterator for DevTreeIndexNodeIter<'a, 'i, 'dt> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreeIndexPropIter<'a, 'i: 'a, 'dt: 'i>(pub DevTreeIndexIter<'a, 'i, 'dt>);
 impl<'a, 'i: 'a, 'dt: 'i> Iterator for DevTreeIndexPropIter<'a, 'i, 'dt> {
     type Item = DevTreeIndexProp<'a, 'i, 'dt>;
@@ -57,7 +70,7 @@ impl<'a, 'i: 'a, 'dt: 'i> Iterator for DevTreeIndexPropIter<'a, 'i, 'dt> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreeIndexNodePropIter<'a, 'i: 'a, 'dt: 'i>(pub DevTreeIndexIter<'a, 'i, 'dt>);
 impl<'a, 'i: 'a, 'dt: 'i> Iterator for DevTreeIndexNodePropIter<'a, 'i, 'dt> {
     type Item = DevTreeIndexProp<'a, 'i, 'dt>;
@@ -66,7 +79,7 @@ impl<'a, 'i: 'a, 'dt: 'i> Iterator for DevTreeIndexNodePropIter<'a, 'i, 'dt> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct DevTreeIndexCompatibleNodeIter<'s, 'a, 'i: 'a, 'dt: 'i> {
     pub iter: DevTreeIndexIter<'a, 'i, 'dt>,
     pub string: &'s str,

@@ -31,7 +31,7 @@ pub(super) struct DTIProp<'dt> {
     pub nameoff: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct DevTreeIndex<'i, 'dt: 'i> {
     fdt: DevTree<'dt>,
     root: *const DTINode<'i, 'dt>,

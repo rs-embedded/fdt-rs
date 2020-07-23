@@ -42,6 +42,12 @@ pub struct DevTree<'dt> {
     buf: &'dt [u8],
 }
 
+impl<'dt> PartialEq for DevTree<'dt> {
+    fn eq(&self, other: &Self) -> bool {
+        self.buf as *const [u8] == other.buf as *const [u8]
+    }
+}
+
 impl<'dt> DevTree<'dt> {
     pub const MIN_HEADER_SIZE: usize = size_of::<fdt_header>();
     /// Verify the magic header of a Device Tree buffer

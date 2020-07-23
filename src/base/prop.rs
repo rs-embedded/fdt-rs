@@ -12,6 +12,14 @@ pub struct DevTreeProp<'a, 'dt: 'a> {
     nameoff: usize,
 }
 
+impl<'a, 'dt: 'a> PartialEq for DevTreeProp<'a, 'dt> {
+    fn eq(&self, other: &Self) -> bool {
+        self.propbuf as *const [u8] == other.propbuf as *const [u8]
+            && self.parent_iter == other.parent_iter
+            && self.nameoff == other.nameoff
+    }
+}
+
 impl<'r, 'dt: 'r> PropReader<'dt> for DevTreeProp<'r, 'dt> {
     type NodeType = DevTreeNode<'r, 'dt>;
 

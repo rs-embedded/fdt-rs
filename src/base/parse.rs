@@ -98,16 +98,32 @@ pub unsafe fn next_devtree_token<'a>(
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct ParsedBeginNode<'a> {
     pub name: &'a [u8],
 }
 
+impl<'a> PartialEq for ParsedBeginNode<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name as *const [u8] == other.name as *const [u8]
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ParsedProp<'a> {
     pub prop_buf: &'a [u8],
     pub name_offset: usize,
 }
 
+impl<'a> PartialEq for ParsedProp<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.prop_buf as *const [u8] == other.prop_buf as *const [u8]
+            && self.name_offset == other.name_offset
+    }
+}
+
 /// Enumeration of all tokens within a device tree's structure block.
+#[derive(Clone, Debug, PartialEq)]
 pub enum ParsedTok<'a> {
     BeginNode(ParsedBeginNode<'a>),
     EndNode,
@@ -115,6 +131,7 @@ pub enum ParsedTok<'a> {
     Nop,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct DevTreeParseIter<'r, 'dt: 'r> {
     pub offset: usize,
     pub fdt: &'r DevTree<'dt>,

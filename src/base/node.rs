@@ -11,6 +11,12 @@ pub struct DevTreeNode<'a, 'dt: 'a> {
     pub(super) parse_iter: DevTreeIter<'a, 'dt>,
 }
 
+impl<'a, 'dt: 'a> PartialEq for DevTreeNode<'a, 'dt> {
+    fn eq(&self, other: &Self) -> bool {
+        self.parse_iter == other.parse_iter
+    }
+}
+
 impl<'a, 'dt: 'a> DevTreeNode<'a, 'dt> {
     /// Returns the name of the `DevTreeNode` (including unit address tag)
     #[inline]
