@@ -20,6 +20,7 @@ setup-rustup:
     - rustup toolchain update stable
     - rustup toolchain update beta
     - rustup toolchain update nightly
+    - sccache -v && export RUSTC_WRAPPER=$CI_PROJECT_DIR/.cargo/bin/sccache; cargo install sccache
 
 .test-template: &test-template
   stage: test
@@ -28,6 +29,7 @@ setup-rustup:
     - rm -rf $CI_PROJECT_DIR/.cargo/cargo
     - mv /usr/local/cargo $CI_PROJECT_DIR/.cargo
     - ln -s $CI_PROJECT_DIR/.cargo/ /usr/local/cargo
+    - sccache -v && export RUSTC_WRAPPER=$CI_PROJECT_DIR/.cargo/bin/sccache
     - export RUST_BACKTRACE=1
     - rustup default "$RUST_TOOLCHAIN"
     - rustup --version
