@@ -1,68 +1,71 @@
+.test-template: &test-template
+  image: 'rust:latest'
+  cache: 
+    key: "$RUST_TOOLCHAIN-build-cache"
+    paths: 
+      - cargo/
+      - target/
+  before_script:
+    - export CARGO_HOME="$CI_PROJECT_DIR/cargo"
+    - rustup default "$RUST_TOOLCHAIN"
+    - rustup update
+    - rustup --version
+    - rustc --version
+    - cargo --version
+  script:
+    - cargo test --tests --verbose --jobs 1
+    - cargo test --tests --verbose --jobs 1 --release
+    - cargo test --features doctest --doc --verbose --jobs 1
+    - cargo test --features doctest --doc --verbose --jobs 1 --release
+    - cargo test --no-default-features --tests --verbose --jobs 1
+    - cargo test --no-default-features --tests --verbose --jobs 1 --release
+
 test-stable:
-  image: 'rust:latest'
-  script:
-  - rustc --version && cargo --version      # Print version info for debugging
-  - cargo test --tests --verbose --jobs 1
-  - cargo test --tests --verbose --jobs 1 --release
-  - cargo test --features doctest --doc --verbose --jobs 1
-  - cargo test --features doctest --doc --verbose --jobs 1 --release
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN:  stable
 
-  - cargo test --no-default-features --tests --verbose --jobs 1
-  - cargo test --no-default-features --tests --verbose --jobs 1 --release
-
-  # Disabled, we use some std utilites to enable doctests
-  #- cargo test --no-default-features --features doctest --doc --verbose --jobs 1
-  #- cargo test --no-default-features --features doctest --doc --verbose --jobs 1 --release
-  cache:
-    key: stable-build-cache
-
-test-coverage:
-  image: 'rust:latest'
-  script:
-  - cargo install cargo-tarpaulin -f
-  - cargo tarpaulin --verbose
-  cache:
-    key: stable-build-cache
+test-beta:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN:  beta
 
 test-nightly:
-  image: 'rustlang/rust:nightly'
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN:  nightly
+
+test-coverage:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN: stable
   script:
-  - rustc +nightly --version && cargo +nightly --version      # Print version info for debugging
-  - cargo +nightly test --tests --verbose --jobs 1
-  - cargo +nightly test --tests --verbose --jobs 1 --release
-  - cargo +nightly test --features doctest --doc --verbose --jobs 1
-  - cargo +nightly test --features doctest --doc --verbose --jobs 1 --release
+    - cargo install cargo-tarpaulin -f
+    - cargo tarpaulin --verbose
 
-  - cargo +nightly test --no-default-features --tests --verbose --jobs 1
-  - cargo +nightly test --no-default-features --tests --verbose --jobs 1 --release
-  # Disabled, we use some std utilites to enable doctests
-  #- cargo +nightly test --no-default-features --features doctest --doc --verbose --jobs 1
-  #- cargo +nightly test --no-default-features --features doctest --doc --verbose --jobs 1 --release
-
-  cache:
-    key: nightly-build-cache
-    paths:
-    - target/
-
-docs:
-  image: 'rust:latest'
+test-fmt:
+  <<: *test-template
+  variables:
+    RUSTUP_TOOLCHAIN: stable
   script:
-  - rustc --version && cargo --version
-  - cargo doc --no-deps
-  cache:
-    key: stable-build-cache
+    - cargo fmt --all --verbose -- --check
 
-clippy:
-  image: 'rust:latest'
+test-clippy:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN: stable
   before_script:
-  - rustup component add clippy
+    - rustup component add clippy
   script:
-  - cargo clippy -- -D warnings
-  - cargo clippy --no-default-features -- -D warnings
-  cache:
-    key: stable-build-cache
+    - cargo clippy -- -D warnings
+    - cargo clippy --no-default-features -- -D warnings
 
-cache:
-  key: stable-build-cache
-  paths:
-    - target/
+test-docs:
+  <<: *test-template
+  variables:
+    RUST_TOOLCHAIN: nightly
+  script:
+    - rustc --version && cargo --version
+    - cargo doc --no-deps
+
+
