@@ -1,24 +1,43 @@
+image: rust:latest
+stages:
+  - setup
+  - test
+
+cache: 
+  key: build-cache
+  paths: 
+    - .cargo/
+    - .cache/
+    - target/
+
+setup-rustup:
+  stage: setup
+  script:
+    - mkdir -p $CI_PROJECT_DIR
+    - mv /usr/local/cargo $CI_PROJECT_DIR/.cargo
+    - ln -s $CI_PROJECT_DIR/.cargo/ /usr/local/cargo
+    - rustup toolchain update stable
+    - rustup toolchain update beta
+    - rustup toolchain update nightly
+
 .test-template: &test-template
-  image: 'rust:latest'
-  cache: 
-    key: "$RUST_TOOLCHAIN-build-cache"
-    paths: 
-      - cargo/
-      - target/
+  stage: test
   before_script:
-    - export CARGO_HOME="$CI_PROJECT_DIR/cargo"
+    - mkdir -p $CI_PROJECT_DIR
+    - mv /usr/local/cargo $CI_PROJECT_DIR/.cargo
+    - ln -s $CI_PROJECT_DIR/.cargo/ /usr/local/cargo
+    - export RUST_BACKTRACE=1
     - rustup default "$RUST_TOOLCHAIN"
-    - rustup update
     - rustup --version
     - rustc --version
     - cargo --version
   script:
-    - cargo test --tests --verbose --jobs 1
-    - cargo test --tests --verbose --jobs 1 --release
-    - cargo test --features doctest --doc --verbose --jobs 1
-    - cargo test --features doctest --doc --verbose --jobs 1 --release
-    - cargo test --no-default-features --tests --verbose --jobs 1
-    - cargo test --no-default-features --tests --verbose --jobs 1 --release
+    - cargo test --tests --jobs 1
+    - cargo test --tests --jobs 1 --release
+    - cargo test --features doctest --doc --jobs 1
+    - cargo test --features doctest --doc --jobs 1 --release
+    - cargo test --no-default-features --tests --jobs 1
+    - cargo test --no-default-features --tests --jobs 1 --release
 
 test-stable:
   <<: *test-template
@@ -40,23 +59,23 @@ test-coverage:
   variables:
     RUST_TOOLCHAIN: stable
   script:
-    - cargo install cargo-tarpaulin -f
+    - cargo install cargo-tarpaulin
     - cargo tarpaulin --verbose
 
 test-fmt:
   <<: *test-template
   variables:
-    RUSTUP_TOOLCHAIN: stable
+    RUST_TOOLCHAIN: stable
   script:
+    - rustup component add rustfmt
     - cargo fmt --all --verbose -- --check
 
 test-clippy:
   <<: *test-template
   variables:
     RUST_TOOLCHAIN: stable
-  before_script:
-    - rustup component add clippy
   script:
+    - rustup component add clippy
     - cargo clippy -- -D warnings
     - cargo clippy --no-default-features -- -D warnings
 
@@ -65,7 +84,4 @@ test-docs:
   variables:
     RUST_TOOLCHAIN: nightly
   script:
-    - rustc --version && cargo --version
     - cargo doc --no-deps
-
-
