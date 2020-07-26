@@ -1,13 +1,12 @@
 image: registry.gitlab.com/spwilson2/rust-sccache
 
-cache: 
-  key: build-cache
-  paths: 
-    - .cargo/
-    - .cache/
-    - target/
-
 .test-template: &test-template
+  cache:
+    key: build-cache-$RUST_TOOLCHAIN
+    paths: 
+      - .cargo/
+      - .cache/
+      - target/
   before_script:
     - export RUST_BACKTRACE=1
     - rustup default "$RUST_TOOLCHAIN"
