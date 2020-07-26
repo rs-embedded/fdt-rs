@@ -1,7 +1,4 @@
-image: rust:latest
-stages:
-  - setup
-  - test
+image: registry.gitlab.com/spwilson2/rust-sccache
 
 cache: 
   key: build-cache
@@ -10,26 +7,8 @@ cache:
     - .cache/
     - target/
 
-setup-rustup:
-  stage: setup
-  script:
-    - mkdir -p $CI_PROJECT_DIR
-    - rm -rf $CI_PROJECT_DIR/.cargo/cargo
-    - mv /usr/local/cargo $CI_PROJECT_DIR/.cargo
-    - ln -s $CI_PROJECT_DIR/.cargo/ /usr/local/cargo
-    - rustup toolchain update stable
-    - rustup toolchain update beta
-    - rustup toolchain update nightly
-    - sccache -v && export RUSTC_WRAPPER=$CI_PROJECT_DIR/.cargo/bin/sccache; cargo install sccache
-
 .test-template: &test-template
-  stage: test
   before_script:
-    - mkdir -p $CI_PROJECT_DIR
-    - rm -rf $CI_PROJECT_DIR/.cargo/cargo
-    - mv /usr/local/cargo $CI_PROJECT_DIR/.cargo
-    - ln -s $CI_PROJECT_DIR/.cargo/ /usr/local/cargo
-    - sccache -v && export RUSTC_WRAPPER=$CI_PROJECT_DIR/.cargo/bin/sccache
     - export RUST_BACKTRACE=1
     - rustup default "$RUST_TOOLCHAIN"
     - rustup --version
