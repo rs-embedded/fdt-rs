@@ -209,7 +209,7 @@ impl<'a, 'i: 'a, 'dt: 'i> DevTreeIndexIter<'a, 'i, 'dt> {
             // string.
             while let Some(prop) = self.next_prop() {
                 unsafe {
-                    if prop.name().ok()? == "compatible" && prop.get_str().ok()? == string {
+                    if prop.name().ok()? == "compatible" && prop.str().ok()? == string {
                         return Some(prop.node());
                     }
                 }

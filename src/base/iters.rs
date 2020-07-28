@@ -218,7 +218,7 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
             loop {
                 match self.next_prop() {
                     Ok(Some(prop)) => unsafe {
-                        if prop.name()? == "compatible" && prop.get_str()? == string {
+                        if prop.name()? == "compatible" && prop.str()? == string {
                             return Ok(Some(prop.node()));
                         }
                         continue;

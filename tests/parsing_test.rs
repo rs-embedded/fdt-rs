@@ -167,19 +167,14 @@ fn node_prop_iter() {
             let mut prop_iter = node.props();
             while let Some(prop) = prop_iter.next().unwrap() {
                 if prop.length() > 0 {
-                    if let Ok(i) = prop.get_str_count() {
+                    if let Ok(i) = prop.iter_str().count() {
                         if i == 0 {
                             continue;
                         }
                         assert!(i < 64);
-                        let mut vec: &mut [Option<&str>] = &mut [None; 64];
-                        if prop.get_strlist(&mut vec).is_err() {
-                            continue;
-                        }
 
-                        let mut iter = vec.iter();
-
-                        while let Some(Some(s)) = iter.next() {
+                        let mut iter = prop.iter_str();
+                        while let Some(s) = iter.next().unwrap() {
                             let _ = s;
                         }
                     }

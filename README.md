@@ -14,7 +14,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies.fdt-rs]
-version = "0.3"
+version = "0.4"
 ```
 
 and this to your crate root:
@@ -30,7 +30,7 @@ the default `std` feature. Use this in `Cargo.toml`:
 
 ```toml
 [dependencies.fdt-rs]
-version = "0.3"
+version = "0.4"
 default-features = false
 ```
 
