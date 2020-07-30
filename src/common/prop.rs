@@ -105,6 +105,10 @@ pub trait PropReader<'dt> {
         self.iter_str().next()?.ok_or(DevTreeError::ParseError)
     }
 
+    /// Returns the property as a string fallible_iterator.
+    /// # Safety
+    ///
+    /// See the safety note of [`PropReader::u32`]
     #[inline]
     unsafe fn iter_str(&self) -> StringPropIter<'dt> {
         StringPropIter::new(self.propbuf())
@@ -122,6 +126,7 @@ pub trait PropReader<'dt> {
 
 use fallible_iterator::FallibleIterator;
 
+#[derive(Debug, Clone)]
 pub struct StringPropIter<'dt> {
     offset: usize,
     propbuf: &'dt [u8],
@@ -129,10 +134,7 @@ pub struct StringPropIter<'dt> {
 
 impl<'dt> StringPropIter<'dt> {
     fn new(propbuf: &'dt [u8]) -> Self {
-        Self {
-            propbuf,
-            offset: 0,
-        }
+        Self { propbuf, offset: 0 }
     }
 }
 
@@ -140,16 +142,16 @@ impl<'dt> FallibleIterator for StringPropIter<'dt> {
     type Error = DevTreeError;
     type Item = &'dt str;
 
-    fn next(&mut self) ->  Result<Option<Self::Item>> {
+    fn next(&mut self) -> Result<Option<Self::Item>> {
         unsafe {
             if self.offset > self.propbuf.len() {
-                return Ok(None)
+                return Ok(None);
             }
 
             let u8_slice = self.propbuf.read_bstring0(self.offset)?;
             // Include null byte
             self.offset += u8_slice.len() + 1;
-            return Ok(Some(from_utf8(u8_slice)?));
+            Ok(Some(from_utf8(u8_slice)?))
         }
     }
 }
