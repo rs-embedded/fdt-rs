@@ -12,6 +12,7 @@ use crate::spec::fdt_reserve_entry;
 
 // Re-export the basic parse iterator.
 pub use super::parse::DevTreeParseIter;
+pub use crate::common::prop::StringPropIter;
 
 use fallible_iterator::FallibleIterator;
 
@@ -217,12 +218,12 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
             // string.
             loop {
                 match self.next_prop() {
-                    Ok(Some(prop)) => unsafe {
+                    Ok(Some(prop)) => {
                         if prop.name()? == "compatible" && prop.str()? == string {
                             return Ok(Some(prop.node()));
                         }
                         continue;
-                    },
+                    }
                     Ok(None) => return Ok(None),
                     Err(e) => return Err(e),
                 }

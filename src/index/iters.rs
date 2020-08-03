@@ -208,10 +208,8 @@ impl<'a, 'i: 'a, 'dt: 'i> DevTreeIndexIter<'a, 'i, 'dt> {
             // Iterate through all remaining properties in the tree looking for the compatible
             // string.
             while let Some(prop) = self.next_prop() {
-                unsafe {
-                    if prop.name().ok()? == "compatible" && prop.str().ok()? == string {
-                        return Some(prop.node());
-                    }
+                if prop.name().ok()? == "compatible" && prop.str().ok()? == string {
+                    return Some(prop.node());
                 }
             }
             None
