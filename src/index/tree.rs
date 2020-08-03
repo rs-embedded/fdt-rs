@@ -132,12 +132,28 @@ impl<'i, 'dt: 'i> DTIBuilder<'i, 'dt> {
                     prev_new_node"
                 );
 
-                (*self.prev_new_node).next = new_ptr;
+                // While we're streaming through new nodes, parent.next will always point to our
+                // last sibling. Use that fact to change our previous sibling to point towards this
+                // node node.
                 if !(*parent).next.is_null() {
                     let prev_sibling = (*parent).next as *mut DTINode;
                     (*prev_sibling).next = new_ptr;
                 }
                 (*parent).next = new_ptr;
+
+                // Update the last new node's next pointer to point towards us.
+                // This is needed to get DFS to work.
+                // In particular, this step is essential for nephew to point to us.
+                //
+                // / {
+                //   sib {
+                //      nephew {
+                //      };
+                //   };
+                //   us {
+                //   };
+                // };
+                (*self.prev_new_node).next = new_ptr;
 
                 // If this new node is the first node that follows the current one, it is the current's
                 // first child.
@@ -146,8 +162,11 @@ impl<'i, 'dt: 'i> DTIBuilder<'i, 'dt> {
                 }
             }
 
-            // Save the new node ptr.
+            // Update the current parent node to be us.
+            // Outside this function, the cur_node may change (if we see a EndNode token).
             self.cur_node = new_ptr;
+            // Save a pointer to the last created node.
+            // See the note in the assignment to its `next` field above.
             self.prev_new_node = new_ptr;
         }
 
