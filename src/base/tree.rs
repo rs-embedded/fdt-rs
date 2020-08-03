@@ -132,25 +132,67 @@ impl<'dt> DevTree<'dt> {
         unsafe { get_be32_field!(totalsize, fdt_header, self.buf).unwrap() as usize }
     }
 
-    /// Returns the of rsvmap offset field of the Device Tree
+    /// Returns the rsvmap offset field of the Device Tree
     #[inline]
     #[must_use]
     pub fn off_mem_rsvmap(&self) -> usize {
         unsafe { get_be32_field!(off_mem_rsvmap, fdt_header, self.buf).unwrap() as usize }
     }
 
-    /// Returns the of dt_struct offset field of the Device Tree
+    /// Returns the dt_struct offset field of the Device Tree
     #[inline]
     #[must_use]
     pub fn off_dt_struct(&self) -> usize {
         unsafe { get_be32_field!(off_dt_struct, fdt_header, self.buf).unwrap() as usize }
     }
 
-    /// Returns the of dt_strings offset field of the Device Tree
+    /// Returns the dt_strings offset field of the Device Tree
     #[inline]
     #[must_use]
     pub fn off_dt_strings(&self) -> usize {
         unsafe { get_be32_field!(off_dt_strings, fdt_header, self.buf).unwrap() as usize }
+    }
+
+    /// Returns the magic field of the Device Tree
+    #[inline]
+    #[must_use]
+    pub fn magic(&self) -> u32 {
+        unsafe { get_be32_field!(magic, fdt_header, self.buf).unwrap() }
+    }
+
+    /// Returns the version field of the Device Tree
+    #[inline]
+    #[must_use]
+    pub fn version(&self) -> u32 {
+        unsafe { get_be32_field!(version, fdt_header, self.buf).unwrap() }
+    }
+
+    /// Returns the boot_cpuid_phys field of the Device Tree
+    #[inline]
+    #[must_use]
+    pub fn boot_cpuid_phys(&self) -> u32 {
+        unsafe { get_be32_field!(boot_cpuid_phys, fdt_header, self.buf).unwrap() }
+    }
+
+    /// Returns the last_comp_version field of the Device Tree
+    #[inline]
+    #[must_use]
+    pub fn last_comp_version(&self) -> u32 {
+        unsafe { get_be32_field!(last_comp_version, fdt_header, self.buf).unwrap() }
+    }
+
+    /// Returns the size_dt_strings field of the Device Tree
+    #[inline]
+    #[must_use]
+    pub fn size_dt_strings(&self) -> u32 {
+        unsafe { get_be32_field!(size_dt_strings, fdt_header, self.buf).unwrap() }
+    }
+
+    /// Returns the size_dt_struct field of the Device Tree
+    #[inline]
+    #[must_use]
+    pub fn size_dt_struct(&self) -> u32 {
+        unsafe { get_be32_field!(size_dt_struct, fdt_header, self.buf).unwrap() }
     }
 
     /// Returns a typed `*const T` to the given offset in the Device Tree buffer.
