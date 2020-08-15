@@ -134,11 +134,19 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
         match self.current_prop_parent_off {
             Some(offset) => Some(DevTreeIter {
                 fdt: self.fdt,
-                current_prop_parent_off: self.current_prop_parent_off,
+                current_prop_parent_off: Some(offset),
                 offset: offset.get(),
             }),
             None => None,
         }
+    }
+
+    pub fn last_node(mut self) -> Option<DevTreeNode<'a, 'dt>> {
+        if let Some(off) = self.current_prop_parent_off.take() {
+            self.offset = off.get();
+            return self.next_node().unwrap();
+        }
+        None
     }
 
     pub fn next_item(&mut self) -> Result<Option<DevTreeItem<'a, 'dt>>> {
@@ -160,7 +168,7 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
                     // Prop must come after a node.
                     let prev_node = match self.current_node_itr() {
                         Some(n) => n,
-                        None => return Ok(None),
+                        None => return Err(DevTreeError::ParseError),
                     };
 
                     return Ok(Some(DevTreeItem::Prop(DevTreeProp::new(
@@ -184,7 +192,7 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
         loop {
             match self.next() {
                 Ok(Some(DevTreeItem::Prop(p))) => return Ok(Some(p)),
-                Ok(Some(_p)) => continue,
+                Ok(Some(_n)) => continue,
                 Ok(None) => return Ok(None),
                 Err(e) => return Err(e),
             }

@@ -129,6 +129,40 @@ fn verify_prop_comparisions() {
     }
 }
 
+// Test that comparision of props works as expected.
+#[test]
+fn get_prop_node() {
+    unsafe {
+        let blob = DevTree::new(FDT).unwrap();
+
+        let prop = blob.props().next().unwrap().unwrap();
+        let node = prop.node();
+
+        assert_eq!(node.name().unwrap(), "");
+    }
+}
+
+// Test that comparision of props works as expected.
+#[test]
+fn get_memory_prop_node() {
+    unsafe {
+        let blob = DevTree::new(FDT).unwrap();
+
+        let mem_prop = blob
+            .props()
+            .find(|p| Ok(p.name()? == "device_type" && p.str()? == "memory"))
+            .unwrap()
+            .expect("Unable to find memory node.");
+        let mem_node = mem_prop.node();
+
+        let _ = mem_node
+            .props()
+            .find(|p| Ok(p.name()? == "reg"))
+            .unwrap()
+            .expect("Device tree memory node missing 'reg' prop.");
+    }
+}
+
 // Test that comparision of nodes works as expected.
 #[test]
 fn verify_node_comparisions() {
@@ -292,6 +326,23 @@ pub mod index_tests {
             }
             prev = Some(child);
         }
+    }
+
+    #[test]
+    fn get_memory_prop_node() {
+        let idx = get_fdt_index();
+
+        let mem_prop = idx
+            .index
+            .props()
+            .find(|p| p.name() == Ok("device_type") && p.str() == Ok("memory"))
+            .expect("Unable to find memory node.");
+        let mem_node = mem_prop.node();
+
+        let _ = mem_node
+            .props()
+            .find(|p| p.name() == Ok("reg"))
+            .expect("Device tree memory node missing 'reg' prop.");
     }
 
     // Test iteration over the root nodes props.
