@@ -71,3 +71,5 @@ fn main() {
 }
 
 ```
+
+Also check out [fdtdump](https://github.com/rs-embedded/fdtdump) for an example implementation of the fdtdump Device Tree utility using this library.
