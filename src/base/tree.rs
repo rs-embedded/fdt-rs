@@ -4,6 +4,7 @@ use crate::base::parse::ParsedTok;
 use crate::base::*;
 
 use core::mem::size_of;
+use core::slice;
 
 use crate::error::{DevTreeError, Result};
 
@@ -103,6 +104,24 @@ impl<'dt> DevTree<'dt> {
         Ok(get_be32_field!(totalsize, fdt_header, buf)? as usize)
     }
 
+    /// Construct the parseable DevTree object from the provided byte slice without any check. This
+    /// is for iternal use only
+    ///
+    /// # Safety
+    ///
+    /// Callers of this method the must guarantee the following:
+    ///
+    /// - The passed buffer is 32-bit aligned.
+    /// - The passed buffer is exactly the length returned by [`Self::read_totalsize()`]
+    #[inline]
+    fn from_safe_slice(buf: &'dt [u8]) -> Result<Self> {
+        let ret = Self { buf };
+        // Verify required alignment before returning.
+        verify_offset_aligned::<u32>(ret.off_mem_rsvmap())?;
+        verify_offset_aligned::<u32>(ret.off_dt_struct())?;
+        Ok(ret)
+    }
+
     /// Construct the parseable DevTree object from the provided byte slice.
     ///
     /// # Safety
@@ -116,12 +135,25 @@ impl<'dt> DevTree<'dt> {
         if Self::read_totalsize(buf)? < buf.len() {
             Err(DevTreeError::ParseError)
         } else {
-            let ret = Self { buf };
-            // Verify required alignment before returning.
-            verify_offset_aligned::<u32>(ret.off_mem_rsvmap())?;
-            verify_offset_aligned::<u32>(ret.off_dt_struct())?;
-            Ok(ret)
+            Self::from_safe_slice(buf)
         }
+    }
+
+    /// Construct the parseable DevTree object from a raw byte pointer
+    ///
+    /// # Safety
+    ///
+    /// Callers of this method the must guarantee the following:
+    ///
+    /// - The passed buffer is 32-bit aligned.
+    /// - The passed buffer is exactly the length returned by [`Self::read_totalsize()`]
+    #[inline]
+    pub unsafe fn from_raw_pointer(addr: *const u8) -> Result<Self> {
+        let buf: &[u8] = slice::from_raw_parts(addr, Self::MIN_HEADER_SIZE);
+        let buf_size = Self::read_totalsize(buf)?;
+        let buf: &[u8] = slice::from_raw_parts(addr, buf_size);
+
+        Self::from_safe_slice(buf)
     }
 
     /// Returns the totalsize field of the Device Tree. This is the number of bytes of the device
