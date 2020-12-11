@@ -102,6 +102,19 @@ fn nodes_iter() {
     }
 }
 
+#[test]
+fn nodes_iter_from_raw_pointer() {
+    unsafe {
+        let blob = DevTree::from_raw_pointer(&FDT[0] as *const u8).unwrap();
+        let iter = blob.nodes();
+        let mut pair_iter = iter.clone().zip(FBI(DFS_NODES.iter()));
+        while let Some((node, expected)) = pair_iter.next().unwrap() {
+            assert_eq!(node.name().unwrap(), *expected);
+        }
+        assert!(iter.count().unwrap() == DFS_NODES.len());
+    }
+}
+
 // Test that comparision of props works as expected.
 #[test]
 fn verify_prop_comparisions() {
