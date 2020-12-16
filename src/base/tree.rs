@@ -114,7 +114,7 @@ impl<'dt> DevTree<'dt> {
     /// - The passed buffer is 32-bit aligned.
     /// - The passed buffer is exactly the length returned by [`Self::read_totalsize()`]
     #[inline]
-    fn from_safe_slice(buf: &'dt [u8]) -> Result<Self> {
+    unsafe fn from_safe_slice(buf: &'dt [u8]) -> Result<Self> {
         let ret = Self { buf };
         // Verify required alignment before returning.
         verify_offset_aligned::<u32>(ret.off_mem_rsvmap())?;
