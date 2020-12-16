@@ -145,8 +145,7 @@ impl<'dt> DevTree<'dt> {
     ///
     /// Callers of this method the must guarantee the following:
     ///
-    /// - The passed buffer is 32-bit aligned.
-    /// - The passed buffer is exactly the length returned by [`Self::read_totalsize()`]
+    /// - The passed address is 32-bit aligned.
     #[inline]
     pub unsafe fn from_raw_pointer(addr: *const u8) -> Result<Self> {
         let buf: &[u8] = slice::from_raw_parts(addr, Self::MIN_HEADER_SIZE);
