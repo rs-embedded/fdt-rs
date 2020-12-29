@@ -49,7 +49,7 @@ pub mod common;
 pub(crate) mod priv_util;
 
 // When the doctest feature is enabled, add these utility functions.
-#[cfg(any(feature = "doctest", doc))]
+#[cfg(all(any(feature = "doctest", doc), feature = "std"))]
 #[doc(hidden)]
 pub mod doctest {
     pub use crate::base::*;

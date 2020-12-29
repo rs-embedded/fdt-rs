@@ -55,7 +55,7 @@
 //!
 //! ```
 //!
-#[cfg(doc)]
+#[cfg(all(doc, feature = "std"))]
 use crate::doctest::*;
 
 #[doc(hidden)]
