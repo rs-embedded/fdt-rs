@@ -8,8 +8,8 @@ use fdt_rs::prelude::*;
 /// Fallible Basic Iterator
 ///
 /// A simple wrapper around a normal iterator which will return Ok(Option<I::Item>)
-struct FBI<I: Iterator>(pub I);
-impl<I> FallibleIterator for FBI<I>
+struct Fbi<I: Iterator>(pub I);
+impl<I> FallibleIterator for Fbi<I>
 where
     I: Iterator,
 {
@@ -94,7 +94,7 @@ fn nodes_iter() {
     unsafe {
         let blob = DevTree::new(FDT).unwrap();
         let iter = blob.nodes();
-        let mut pair_iter = iter.clone().zip(FBI(DFS_NODES.iter()));
+        let mut pair_iter = iter.clone().zip(Fbi(DFS_NODES.iter()));
         while let Some((node, expected)) = pair_iter.next().unwrap() {
             assert_eq!(node.name().unwrap(), *expected);
         }
@@ -107,7 +107,7 @@ fn nodes_iter_from_raw_pointer() {
     unsafe {
         let blob = DevTree::from_raw_pointer(&FDT[0] as *const u8).unwrap();
         let iter = blob.nodes();
-        let mut pair_iter = iter.clone().zip(FBI(DFS_NODES.iter()));
+        let mut pair_iter = iter.clone().zip(Fbi(DFS_NODES.iter()));
         while let Some((node, expected)) = pair_iter.next().unwrap() {
             assert_eq!(node.name().unwrap(), *expected);
         }
@@ -370,12 +370,12 @@ pub mod index_tests {
         test_prop_iteration(&get_fdt_index());
     }
 
-    pub fn test_prop_iteration<'dt>(idx: &FdtIndex<'dt>) {
+    pub fn test_prop_iteration(idx: &FdtIndex) {
         let iter = idx.index.props();
         assert_eq!(iter.count(), 105);
     }
 
-    pub fn test_root_prop_iteration<'dt>(idx: &FdtIndex<'dt>) {
+    pub fn test_root_prop_iteration(idx: &FdtIndex) {
         let root_props = &["#address-cells", "#size-cells", "compatible", "model"];
 
         let iter = idx.index.root().props();
@@ -385,7 +385,7 @@ pub mod index_tests {
         assert!(iter.count() == root_props.len());
     }
 
-    pub fn test_index_dfs<'dt>(idx: &FdtIndex<'dt>) {
+    pub fn test_index_dfs(idx: &FdtIndex) {
         let iter = idx.index.nodes();
         for (node, expected) in iter.clone().zip(DFS_NODES) {
             assert_eq!(node.name().unwrap(), *expected);

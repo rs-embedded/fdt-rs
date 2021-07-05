@@ -85,8 +85,8 @@ pub unsafe fn next_devtree_token<'a>(
             let name_offset = name_offset;
 
             Ok(Some(ParsedTok::Prop(ParsedProp {
-                name_offset,
                 prop_buf,
+                name_offset,
             })))
         }
         Some(FdtTok::EndNode) => Ok(Some(ParsedTok::EndNode)),
