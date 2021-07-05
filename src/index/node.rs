@@ -19,7 +19,7 @@ impl<'a, 'i: 'a, 'dt: 'i> PartialEq for DevTreeIndexNode<'a, 'i, 'dt> {
 
 impl<'a, 'i: 'a, 'dt: 'i> DevTreeIndexNode<'a, 'i, 'dt> {
     pub(super) fn new(index: &'a DevTreeIndex<'i, 'dt>, node: &'a DTINode<'i, 'dt>) -> Self {
-        Self { node, index }
+        Self { index, node }
     }
 
     pub fn index(&self) -> &'a DevTreeIndex<'i, 'dt> {
