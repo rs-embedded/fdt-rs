@@ -23,8 +23,6 @@
 //!
 #![deny(clippy::all, clippy::cargo)]
 #![allow(clippy::as_conversions)]
-// Test the readme if using nightly.
-#![cfg_attr(RUSTC_IS_NIGHTLY, feature(external_doc))]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
@@ -56,11 +54,15 @@ pub mod doctest {
     pub use crate::index::*;
     pub use crate::prelude::*;
 
-    // Include the readme for doctests
-    // https://doc.rust-lang.org/rustdoc/documentation-tests.html#include-items-only-when-collecting-doctests
-    #[cfg(RUSTC_IS_NIGHTLY)]
-    #[doc(include = "../README.md")]
-    pub struct ReadmeDoctests;
+    // from https://github.com/rust-lang/cargo/issues/383#issuecomment-720873790
+    macro_rules! external_doc_test {
+        ($x:expr) => {
+            #[doc = $x]
+            extern "C" {}
+        };
+    }
+
+    external_doc_test!(include_str!("../README.md"));
 
     #[repr(align(4))]
     struct _Wrapper<T>(T);
