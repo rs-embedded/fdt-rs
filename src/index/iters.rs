@@ -1,3 +1,5 @@
+use core::ptr;
+
 use crate::prelude::*;
 
 use super::tree::DTINode;
@@ -41,7 +43,7 @@ pub struct DevTreeIndexIter<'a, 'i: 'a, 'dt: 'i> {
 impl<'a, 'i: 'a, 'dt: 'i> PartialEq for DevTreeIndexIter<'a, 'i, 'dt> {
     fn eq(&self, other: &Self) -> bool {
         let cmp = match (self.node, other.node) {
-            (Some(l), Some(r)) => l as *const DTINode == r as *const DTINode,
+            (Some(l), Some(r)) => ptr::eq(l, r),
             (None, None) => true,
             _ => false,
         };
@@ -151,7 +153,7 @@ impl<'a, 'i: 'a, 'dt: 'i> DevTreeIndexIter<'a, 'i, 'dt> {
 
                 self.prop_idx += 1;
                 return Some(DevTreeIndexItem::Prop(DevTreeIndexProp::new(
-                    self.index, &cur_node, prop,
+                    self.index, cur_node, prop,
                 )));
             }
 

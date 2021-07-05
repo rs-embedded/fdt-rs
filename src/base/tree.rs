@@ -4,6 +4,7 @@ use crate::base::parse::ParsedTok;
 use crate::base::*;
 
 use core::mem::size_of;
+use core::ptr;
 use core::slice;
 
 use crate::error::{DevTreeError, Result};
@@ -45,7 +46,7 @@ pub struct DevTree<'dt> {
 
 impl<'dt> PartialEq for DevTree<'dt> {
     fn eq(&self, other: &Self) -> bool {
-        self.buf as *const [u8] == other.buf as *const [u8]
+        ptr::eq(self.buf, other.buf)
     }
 }
 

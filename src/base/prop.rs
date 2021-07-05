@@ -1,3 +1,5 @@
+use core::ptr;
+
 use crate::base::iters::DevTreeIter;
 use crate::base::{DevTree, DevTreeNode};
 use crate::prelude::*;
@@ -14,7 +16,7 @@ pub struct DevTreeProp<'a, 'dt: 'a> {
 
 impl<'a, 'dt: 'a> PartialEq for DevTreeProp<'a, 'dt> {
     fn eq(&self, other: &Self) -> bool {
-        self.propbuf as *const [u8] == other.propbuf as *const [u8]
+        ptr::eq(self.propbuf, other.propbuf)
             && self.parent_iter == other.parent_iter
             && self.nameoff == other.nameoff
     }

@@ -1,3 +1,5 @@
+use core::ptr;
+
 use crate::prelude::*;
 
 use crate::base::parse::ParsedProp;
@@ -18,9 +20,9 @@ pub struct DevTreeIndexProp<'a, 'i: 'a, 'dt: 'i> {
 
 impl<'a, 'i: 'a, 'dt: 'i> PartialEq for DevTreeIndexProp<'a, 'i, 'dt> {
     fn eq(&self, other: &Self) -> bool {
-        self.index as *const DevTreeIndex == other.index as *const DevTreeIndex
-            && self.node as *const DTINode == other.node as *const DTINode
-            && self.prop as *const DTIProp == other.prop as *const DTIProp
+        ptr::eq(self.index, other.index)
+            && ptr::eq(self.node, other.node)
+            && ptr::eq(self.prop, other.prop)
     }
 }
 
@@ -49,7 +51,7 @@ impl<'a, 'i: 'a, 'dt: 'i> PropReader<'dt> for DevTreeIndexProp<'a, 'i, 'dt> {
 
     #[inline]
     fn fdt(&self) -> &DevTree<'dt> {
-        &self.index.fdt()
+        self.index.fdt()
     }
 
     fn node(&self) -> DevTreeIndexNode<'a, 'i, 'dt> {
