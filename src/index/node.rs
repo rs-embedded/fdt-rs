@@ -1,3 +1,4 @@
+use core::ptr;
 use core::str::from_utf8;
 
 use super::iters::{DevTreeIndexIter, DevTreeIndexNodePropIter, DevTreeIndexNodeSiblingIter};
@@ -12,8 +13,7 @@ pub struct DevTreeIndexNode<'a, 'i: 'a, 'dt: 'i> {
 
 impl<'a, 'i: 'a, 'dt: 'i> PartialEq for DevTreeIndexNode<'a, 'i, 'dt> {
     fn eq(&self, other: &Self) -> bool {
-        self.index as *const DevTreeIndex == other.index as *const DevTreeIndex
-            && self.node as *const DTINode == other.node as *const DTINode
+        ptr::eq(self.index, other.index) && ptr::eq(self.node, other.node)
     }
 }
 

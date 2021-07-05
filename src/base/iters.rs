@@ -131,14 +131,11 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
     }
 
     fn current_node_itr(&self) -> Option<DevTreeIter<'a, 'dt>> {
-        match self.current_prop_parent_off {
-            Some(offset) => Some(DevTreeIter {
-                fdt: self.fdt,
-                current_prop_parent_off: Some(offset),
-                offset: offset.get(),
-            }),
-            None => None,
-        }
+        self.current_prop_parent_off.map(|offset| DevTreeIter {
+            fdt: self.fdt,
+            current_prop_parent_off: Some(offset),
+            offset: offset.get(),
+        })
     }
 
     pub fn last_node(mut self) -> Option<DevTreeNode<'a, 'dt>> {

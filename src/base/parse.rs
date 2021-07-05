@@ -2,6 +2,7 @@
 //!
 
 use core::mem::size_of;
+use core::ptr;
 
 use num_traits::FromPrimitive;
 
@@ -105,7 +106,7 @@ pub struct ParsedBeginNode<'a> {
 
 impl<'a> PartialEq for ParsedBeginNode<'a> {
     fn eq(&self, other: &Self) -> bool {
-        self.name as *const [u8] == other.name as *const [u8]
+        ptr::eq(self.name, other.name)
     }
 }
 
@@ -117,8 +118,7 @@ pub struct ParsedProp<'a> {
 
 impl<'a> PartialEq for ParsedProp<'a> {
     fn eq(&self, other: &Self) -> bool {
-        self.prop_buf as *const [u8] == other.prop_buf as *const [u8]
-            && self.name_offset == other.name_offset
+        ptr::eq(self.prop_buf, other.prop_buf) && self.name_offset == other.name_offset
     }
 }
 
