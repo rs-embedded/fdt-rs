@@ -48,7 +48,7 @@ impl<'a, 'dt: 'a> Iterator for DevTreeReserveEntryIter<'a, 'dt> {
         if self.offset > self.fdt.totalsize() {
             None
         } else {
-            // We guaruntee the read will be aligned to 32 bytes because:
+            // We guaruntee the read will be aligned to 32 bits because:
             // - We construct with guarunteed 32-bit aligned offset
             // - We always increment by an aligned amount
             let ret = unsafe { self.read().unwrap() };
