@@ -102,4 +102,23 @@ impl<'a, 'dt: 'a> DevTreeNode<'a, 'dt> {
     pub fn next_sibling(&self) -> Result<Option<DevTreeNode<'a, 'dt>>> {
         self.sibling_nodes().next()
     }
+
+    /// Returns the [`DevTreeNode`] at the given path below this node.
+    pub fn node_at_path<'s, I>(&self, path: I) -> Result<Option<DevTreeNode<'a, 'dt>>>
+    where
+        I: Iterator<Item = &'s str>,
+    {
+        let mut current = self.clone();
+        for component in path {
+            if let Some(found) = current
+                .child_nodes()
+                .find(|node| Ok(node.name()? == component))?
+            {
+                current = found;
+            } else {
+                return Ok(None);
+            }
+        }
+        Ok(Some(current))
+    }
 }
