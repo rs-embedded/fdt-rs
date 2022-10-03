@@ -26,7 +26,7 @@ impl<'a, 'dt: 'a> DevTreeNode<'a, 'dt> {
 
     /// Returns an iterator over this node's children [`DevTreeProp`]
     #[must_use]
-    pub fn props(&'a self) -> DevTreeNodePropIter<'a, 'dt> {
+    pub fn props(&self) -> DevTreeNodePropIter<'a, 'dt> {
         DevTreeNodePropIter(self.parse_iter.clone())
     }
 
