@@ -75,6 +75,11 @@ pub struct DevTreeIter<'a, 'dt: 'a> {
 
     /// Current offset into the flattened dt_struct section of the device tree.
     offset: usize,
+
+    /// The depth we are currently parsing at. 0 is the level of the
+    /// root node, -1 is the level of an imaginary parent of our root
+    /// element and going one element down increases the depth by 1.
+    depth: isize,
     pub(crate) fdt: &'a DevTree<'dt>,
 }
 
@@ -126,6 +131,10 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
         Self {
             offset: fdt.off_dt_struct(),
             current_prop_parent_off: None,
+            // Initially we haven't parsed the root node, so if 0 is
+            // supposed to be the root level, we are one level up from
+            // that.
+            depth: -1,
             fdt,
         }
     }
@@ -135,6 +144,7 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
             fdt: self.fdt,
             current_prop_parent_off: Some(offset),
             offset: offset.get(),
+            depth: self.depth,
         })
     }
 
@@ -146,7 +156,7 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
         None
     }
 
-    pub fn next_item(&mut self) -> Result<Option<DevTreeItem<'a, 'dt>>> {
+    fn next_item_with_depth(&mut self) -> Result<Option<(DevTreeItem<'a, 'dt>, isize)>> {
         loop {
             let old_offset = self.offset;
             // Safe because we only pass offsets which are returned by next_devtree_token.
@@ -154,12 +164,16 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
 
             match res {
                 Some(ParsedTok::BeginNode(node)) => {
+                    self.depth += 1;
                     self.current_prop_parent_off =
                         unsafe { Some(NonZeroUsize::new_unchecked(old_offset)) };
-                    return Ok(Some(DevTreeItem::Node(DevTreeNode {
-                        parse_iter: self.clone(),
-                        name: from_utf8(node.name).map_err(|e| e.into()),
-                    })));
+                    return Ok(Some((
+                        DevTreeItem::Node(DevTreeNode {
+                            parse_iter: self.clone(),
+                            name: from_utf8(node.name).map_err(|e| e.into()),
+                        }),
+                        self.depth,
+                    )));
                 }
                 Some(ParsedTok::Prop(prop)) => {
                     // Prop must come after a node.
@@ -168,21 +182,29 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
                         None => return Err(DevTreeError::ParseError),
                     };
 
-                    return Ok(Some(DevTreeItem::Prop(DevTreeProp::new(
-                        prev_node,
-                        prop.prop_buf,
-                        prop.name_offset,
-                    ))));
+                    return Ok(Some((
+                        DevTreeItem::Prop(DevTreeProp::new(
+                            prev_node,
+                            prop.prop_buf,
+                            prop.name_offset,
+                        )),
+                        self.depth,
+                    )));
                 }
                 Some(ParsedTok::EndNode) => {
                     // The current node has ended.
                     // No properties may follow until the next node starts.
                     self.current_prop_parent_off = None;
+                    self.depth -= 1;
                 }
                 Some(_) => continue,
                 None => return Ok(None),
             }
         }
+    }
+
+    pub fn next_item(&mut self) -> Result<Option<DevTreeItem<'a, 'dt>>> {
+        self.next_item_with_depth().map(|o| o.map(|(item, _)| item))
     }
 
     pub fn next_prop(&mut self) -> Result<Option<DevTreeProp<'a, 'dt>>> {
