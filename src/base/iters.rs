@@ -1,4 +1,5 @@
 //! Iterative parsers of a [`DevTree`].
+use core::cmp::Ordering;
 use core::mem::size_of;
 use core::num::NonZeroUsize;
 use core::str::from_utf8;
@@ -265,5 +266,271 @@ impl<'a, 'dt: 'a> FallibleIterator for DevTreeIter<'a, 'dt> {
 
     fn next(&mut self) -> Result<Option<Self::Item>> {
         self.next_item()
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct DevTreeMinDepthIter<'a, 'dt: 'a> {
+    iter: DevTreeIter<'a, 'dt>,
+    min_depth: isize,
+    ended: bool,
+}
+
+impl<'a, 'dt: 'a> DevTreeMinDepthIter<'a, 'dt> {
+    pub fn new(iter: DevTreeIter<'a, 'dt>, min_depth: isize) -> Self {
+        Self {
+            iter,
+            min_depth,
+            ended: false,
+        }
+    }
+}
+
+impl<'a, 'dt> FallibleIterator for DevTreeMinDepthIter<'a, 'dt> {
+    type Error = DevTreeError;
+    type Item = (DevTreeItem<'a, 'dt>, isize);
+
+    fn next(&mut self) -> Result<Option<Self::Item>> {
+        if self.ended {
+            return Ok(None);
+        }
+        loop {
+            match self.iter.next_item_with_depth() {
+                Ok(Some((item, depth))) => {
+                    if depth >= self.min_depth {
+                        break Ok(Some((item, depth)));
+                    } else if let DevTreeItem::Node(_) = item {
+                        self.ended = true;
+                        break Ok(None);
+                    }
+                }
+                r => break r,
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, max) = self.iter.size_hint();
+        (0, max)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct DevTreeDepthIter<'a, 'dt: 'a> {
+    iter: DevTreeIter<'a, 'dt>,
+    depth: isize,
+    ended: bool,
+}
+
+impl<'a, 'dt: 'a> DevTreeDepthIter<'a, 'dt> {
+    fn new(iter: DevTreeIter<'a, 'dt>, depth: isize) -> Self {
+        Self {
+            iter,
+            depth,
+            ended: false,
+        }
+    }
+}
+
+impl<'a, 'dt> FallibleIterator for DevTreeDepthIter<'a, 'dt> {
+    type Error = DevTreeError;
+    type Item = (DevTreeItem<'a, 'dt>, isize);
+
+    fn next(&mut self) -> Result<Option<Self::Item>> {
+        if self.ended {
+            return Ok(None);
+        }
+        loop {
+            match self.iter.next_item_with_depth() {
+                Ok(Some((item, depth))) => match depth.cmp(&self.depth) {
+                    Ordering::Equal => {
+                        break Ok(Some((item, depth)));
+                    }
+                    Ordering::Less => {
+                        if let DevTreeItem::Node(_) = item {
+                            self.ended = true;
+                            break Ok(None);
+                        }
+                    }
+                    _ => {}
+                },
+                r => break r,
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, max) = self.iter.size_hint();
+        (0, max)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct DevTreeSkipCurrentIter<I> {
+    iter: I,
+    target_depth: isize,
+    done: bool,
+}
+
+impl<I> DevTreeSkipCurrentIter<I> {
+    fn new(iter: I, current_depth: isize) -> Self {
+        Self {
+            iter,
+            target_depth: current_depth,
+            done: false,
+        }
+    }
+}
+
+impl<'a, 'dt: 'a, I> FallibleIterator for DevTreeSkipCurrentIter<I>
+where
+    I: FallibleIterator<Item = (DevTreeItem<'a, 'dt>, isize)>,
+{
+    type Error = I::Error;
+    type Item = (DevTreeItem<'a, 'dt>, isize);
+
+    fn next(&mut self) -> core::result::Result<Option<Self::Item>, I::Error> {
+        if self.done {
+            self.iter.next()
+        } else {
+            loop {
+                if let Ok(Some((DevTreeItem::Node(node), depth))) = self.iter.next() {
+                    if depth == self.target_depth {
+                        self.done = true;
+                        break Ok(Some((DevTreeItem::Node(node), depth)));
+                    }
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, max) = self.iter.size_hint();
+        (0, max)
+    }
+}
+
+#[derive(PartialEq, Clone)]
+struct WithoutDepth<I>(I);
+
+impl<I, V, D> FallibleIterator for WithoutDepth<I>
+where
+    I: FallibleIterator<Item = (V, D)>,
+{
+    type Error = I::Error;
+    type Item = V;
+
+    fn next(&mut self) -> core::result::Result<Option<Self::Item>, Self::Error> {
+        self.0.next().map(|o| o.map(|(v, _)| v))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+/// A variant of [`DevTreeIter`] limited to only descendants of a
+/// given node.
+#[derive(Clone, PartialEq)]
+pub struct DevTreeDescendantsIter<'a, 'dt>(WithoutDepth<DevTreeMinDepthIter<'a, 'dt>>);
+
+impl<'a, 'dt> DevTreeDescendantsIter<'a, 'dt> {
+    pub(crate) fn new(iter: DevTreeIter<'a, 'dt>) -> Self {
+        let target_depth = iter.depth + 1;
+        Self(WithoutDepth(DevTreeMinDepthIter::new(iter, target_depth)))
+    }
+}
+
+impl<'a, 'dt> FallibleIterator for DevTreeDescendantsIter<'a, 'dt> {
+    type Error = DevTreeError;
+    type Item = DevTreeItem<'a, 'dt>;
+
+    fn next(&mut self) -> Result<Option<Self::Item>> {
+        self.0.next()
+    }
+}
+
+/// A variant of [`DevTreeIter`] limited to only direct children of a
+/// given node.
+#[derive(Clone, PartialEq)]
+pub struct DevTreeChildrenIter<'a, 'dt>(WithoutDepth<DevTreeDepthIter<'a, 'dt>>);
+
+impl<'a, 'dt> DevTreeChildrenIter<'a, 'dt> {
+    pub(crate) fn new(iter: DevTreeIter<'a, 'dt>) -> Self {
+        let target_depth = iter.depth + 1;
+        Self(WithoutDepth(DevTreeDepthIter::new(iter, target_depth)))
+    }
+}
+
+impl<'a, 'dt> FallibleIterator for DevTreeChildrenIter<'a, 'dt> {
+    type Error = DevTreeError;
+    type Item = DevTreeItem<'a, 'dt>;
+
+    fn next(&mut self) -> Result<Option<Self::Item>> {
+        self.0.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+/// A variant of [`DevTreeIter`] limited to only later siblings and
+/// their descendants of a given node. Note that this will only yield
+/// siblings that come after the reference node, but not any before
+/// that node.
+#[derive(Clone, PartialEq)]
+pub struct DevTreeSiblingsAndDescendantsIter<'a, 'dt>(
+    WithoutDepth<DevTreeSkipCurrentIter<DevTreeMinDepthIter<'a, 'dt>>>,
+);
+
+impl<'a, 'dt> DevTreeSiblingsAndDescendantsIter<'a, 'dt> {
+    pub(crate) fn new(iter: DevTreeIter<'a, 'dt>) -> Self {
+        let current_depth = iter.depth;
+        Self(WithoutDepth(DevTreeSkipCurrentIter::new(
+            DevTreeMinDepthIter::new(iter, current_depth),
+            current_depth,
+        )))
+    }
+}
+
+impl<'a, 'dt> FallibleIterator for DevTreeSiblingsAndDescendantsIter<'a, 'dt> {
+    type Error = DevTreeError;
+    type Item = DevTreeItem<'a, 'dt>;
+
+    fn next(&mut self) -> Result<Option<Self::Item>> {
+        self.0.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+/// A variant of [`DevTreeIter`] limited to only later siblings of a
+/// given node. Note that this will only yield siblings that come
+/// after the reference node, but not any before that node.
+#[derive(Clone, PartialEq)]
+pub struct DevTreeSiblingsIter<'a, 'dt>(
+    WithoutDepth<DevTreeSkipCurrentIter<DevTreeDepthIter<'a, 'dt>>>,
+);
+
+impl<'a, 'dt> DevTreeSiblingsIter<'a, 'dt> {
+    pub(crate) fn new(iter: DevTreeIter<'a, 'dt>) -> Self {
+        let current_depth = iter.depth;
+        Self(WithoutDepth(DevTreeSkipCurrentIter::new(
+            DevTreeDepthIter::new(iter, current_depth),
+            current_depth,
+        )))
+    }
+}
+
+impl<'a, 'dt> FallibleIterator for DevTreeSiblingsIter<'a, 'dt> {
+    type Error = DevTreeError;
+    type Item = DevTreeItem<'a, 'dt>;
+
+    fn next(&mut self) -> Result<Option<Self::Item>> {
+        self.0.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
     }
 }
