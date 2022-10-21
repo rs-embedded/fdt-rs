@@ -94,6 +94,25 @@ impl<'a, 'dt: 'a> FallibleIterator for DevTreeNodeIter<'a, 'dt> {
     }
 }
 
+pub struct DevTreeNodeFilter<I>(pub I);
+impl<'a, 'dt: 'a, I> FallibleIterator for DevTreeNodeFilter<I>
+where
+    I: FallibleIterator<Item = DevTreeItem<'a, 'dt>>,
+{
+    type Error = I::Error;
+    type Item = DevTreeNode<'a, 'dt>;
+    fn next(&mut self) -> core::result::Result<Option<Self::Item>, Self::Error> {
+        loop {
+            match self.0.next() {
+                Ok(Some(DevTreeItem::Node(item))) => break Ok(Some(item)),
+                Ok(Some(_)) => {}
+                Ok(None) => break Ok(None),
+                Err(e) => break Err(e),
+            }
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct DevTreePropIter<'a, 'dt: 'a>(pub DevTreeIter<'a, 'dt>);
 impl<'a, 'dt: 'a> FallibleIterator for DevTreePropIter<'a, 'dt> {
@@ -104,6 +123,25 @@ impl<'a, 'dt: 'a> FallibleIterator for DevTreePropIter<'a, 'dt> {
     }
 }
 
+pub struct DevTreePropFilter<I>(pub I);
+impl<'a, 'dt: 'a, I> FallibleIterator for DevTreePropFilter<I>
+where
+    I: FallibleIterator<Item = DevTreeItem<'a, 'dt>>,
+{
+    type Error = I::Error;
+    type Item = DevTreeProp<'a, 'dt>;
+    fn next(&mut self) -> core::result::Result<Option<Self::Item>, Self::Error> {
+        loop {
+            match self.0.next() {
+                Ok(Some(DevTreeItem::Prop(p))) => break Ok(Some(p)),
+                Ok(Some(_)) => {}
+                Ok(None) => break Ok(None),
+                Err(e) => break Err(e),
+            }
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct DevTreeNodePropIter<'a, 'dt: 'a>(pub DevTreeIter<'a, 'dt>);
 impl<'a, 'dt: 'a> FallibleIterator for DevTreeNodePropIter<'a, 'dt> {
@@ -111,6 +149,22 @@ impl<'a, 'dt: 'a> FallibleIterator for DevTreeNodePropIter<'a, 'dt> {
     type Item = DevTreeProp<'a, 'dt>;
     fn next(&mut self) -> Result<Option<Self::Item>> {
         self.0.next_node_prop()
+    }
+}
+
+pub struct DevTreeNodePropFilter<I>(pub I);
+impl<'a, 'dt: 'a, I> FallibleIterator for DevTreeNodePropFilter<I>
+where
+    I: FallibleIterator<Item = DevTreeItem<'a, 'dt>>,
+{
+    type Error = I::Error;
+    type Item = DevTreeProp<'a, 'dt>;
+    fn next(&mut self) -> core::result::Result<Option<Self::Item>, Self::Error> {
+        match self.0.next() {
+            Ok(Some(item)) => Ok(item.prop()),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 
