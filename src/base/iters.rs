@@ -224,8 +224,13 @@ impl<'a, 'dt: 'a> DevTreeIter<'a, 'dt> {
             loop {
                 match self.next_prop() {
                     Ok(Some(prop)) => {
-                        if prop.name()? == "compatible" && prop.str()? == string {
-                            return Ok(Some(prop.node()));
+                        if prop.name()? == "compatible" {
+                            let mut candidates = prop.iter_str();
+                            while let Some(s) = candidates.next()? {
+                                if s.eq(string) {
+                                    return Ok(Some(prop.node()));
+                                }
+                            }
                         }
                         continue;
                     }
