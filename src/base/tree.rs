@@ -133,7 +133,7 @@ impl<'dt> DevTree<'dt> {
     /// - The passed buffer is exactly the length returned by [`Self::read_totalsize()`]
     #[inline]
     pub unsafe fn new(buf: &'dt [u8]) -> Result<Self> {
-        if Self::read_totalsize(buf)? < buf.len() {
+        if Self::read_totalsize(buf)? > buf.len() {
             Err(DevTreeError::ParseError)
         } else {
             Self::from_safe_slice(buf)
