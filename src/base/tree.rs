@@ -290,4 +290,16 @@ impl<'dt> DevTree<'dt> {
     pub fn root(&self) -> Result<Option<DevTreeNode<'_, 'dt>>> {
         self.nodes().next()
     }
+
+    /// Returns the [`DevTreeNode`] at the given path
+    pub fn node_at_path<'s, I>(&self, path: I) -> Result<Option<DevTreeNode<'_, 'dt>>>
+    where
+        I: Iterator<Item = &'s str>,
+    {
+        if let Some(root) = self.root()? {
+            root.node_at_path(path)
+        } else {
+            Ok(None)
+        }
+    }
 }

@@ -1,6 +1,8 @@
 extern crate fdt_rs;
 
-use fdt_rs::base::DevTree;
+use core::fmt::Debug;
+
+use fdt_rs::base::{DevTree, DevTreeItem};
 use fdt_rs::error::{DevTreeError, Result};
 use fdt_rs::index::DevTreeIndex;
 use fdt_rs::prelude::*;
@@ -53,6 +55,98 @@ static DFS_NODES: &[&str] = &[
     "interrupt-controller@c000000",
     "clint@2000000",
 ];
+
+#[derive(Debug)]
+enum ItemNameExpectation<'a> {
+    Node(&'a str),
+    Prop(&'a str),
+}
+
+fn check_item_name_expectations<'e, 'a, 'dt: 'a, GI, EI>(got: &mut GI, expected: EI)
+where
+    EI: Iterator<Item = &'e ItemNameExpectation<'e>>,
+    GI: FallibleIterator<Item = DevTreeItem<'a, 'dt>>,
+    GI::Error: Debug,
+{
+    for expectation in expected {
+        let got_item = got
+            .next()
+            .expect("Unexpected iterator failure")
+            .expect("Unexpected end of iterator");
+        match got_item {
+            DevTreeItem::Node(node) => {
+                let node_name = node.name().unwrap();
+                match expectation {
+                    ItemNameExpectation::Node(expected_name) => {
+                        assert!(
+                            &node_name == expected_name,
+                            "Expected node with name {} got {}",
+                            expected_name,
+                            node_name,
+                        );
+                    }
+                    ItemNameExpectation::Prop(expected_name) => {
+                        panic!(
+                            "Expected prop with name {} got node with name {}",
+                            expected_name, node_name,
+                        );
+                    }
+                }
+            }
+            DevTreeItem::Prop(prop) => {
+                let prop_name = prop.name().unwrap();
+                match expectation {
+                    ItemNameExpectation::Node(expected_name) => {
+                        panic!(
+                            "Expected node with name {} got prop with name {}",
+                            expected_name, prop_name,
+                        );
+                    }
+                    ItemNameExpectation::Prop(expected_name) => {
+                        assert!(
+                            &prop_name == expected_name,
+                            "Expected prop with name {} got {}",
+                            expected_name,
+                            prop_name,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    match got.next() {
+        Err(e) => panic!("Expected iterator to end, but it failed instead: {:?}", e),
+        Ok(Some(item)) => {
+            let (t, name) = match item {
+                DevTreeItem::Node(node) => ("node", node.name().unwrap()),
+                DevTreeItem::Prop(prop) => ("prop", prop.name().unwrap()),
+            };
+            panic!(
+                "Expected iterator to end, but it produced a {} with name {}",
+                t, name
+            );
+        }
+        Ok(None) => {}
+    }
+}
+
+macro_rules! item_name_expectation {
+    (prop => $name:expr) => {
+        ItemNameExpectation::Prop($name)
+    };
+    (node => $name:expr) => {
+        ItemNameExpectation::Node($name)
+    };
+}
+
+macro_rules! item_name_expectations {
+    [$($type:ident => $name:expr),*] => { vec![$( item_name_expectation!($type => $name)),*] };
+}
+
+macro_rules! check_item_iter {
+    ($iter:expr $(, $($type:ident => $name:expr),* $(,)?)?) => { check_item_name_expectations($iter, item_name_expectations![$($($type => $name),*)?].iter()) };
+}
 
 pub struct FdtIndex<'dt> {
     index: DevTreeIndex<'dt, 'dt>,
@@ -276,6 +370,113 @@ fn find_all_compatible() {
         }
         assert!(count == exp_count);
     }
+}
+
+#[test]
+fn get_path() {
+    let dt = unsafe { DevTree::new(FDT) }.unwrap();
+    let core0 = dt
+        .node_at_path(IntoIterator::into_iter([
+            "cpus", "cpu-map", "cluster0", "core0",
+        ]))
+        .unwrap()
+        .expect("Expected to find node at path");
+    assert!(core0.name().expect("node name should be readable") == "core0");
+}
+
+#[test]
+fn get_descendants() {
+    let dt = unsafe { DevTree::new(FDT) }.unwrap();
+    let cpus = dt
+        .node_at_path(IntoIterator::into_iter(["cpus"]))
+        .unwrap()
+        .unwrap();
+    check_item_iter!(
+        &mut cpus.descendants(),
+        node => "cpu-map",
+        node => "cluster0",
+        node => "core0",
+        prop => "cpu",
+        node => "cpu@0",
+        prop => "phandle",
+        prop => "device_type",
+        prop => "reg",
+        prop => "status",
+        prop => "compatible",
+        prop => "riscv,isa",
+        prop => "mmu-type",
+        node => "interrupt-controller",
+        prop => "#interrupt-cells",
+        prop => "interrupt-controller",
+        prop => "compatible",
+        prop => "phandle",
+    );
+}
+
+#[test]
+fn get_children() {
+    let dt = unsafe { DevTree::new(FDT) }.unwrap();
+    let cpus = dt
+        .node_at_path(IntoIterator::into_iter(["cpus"]))
+        .unwrap()
+        .unwrap();
+    check_item_iter!(
+        &mut cpus.children(),
+        node => "cpu-map",
+        node => "cpu@0",
+        prop => "phandle",
+        prop => "device_type",
+        prop => "reg",
+        prop => "status",
+        prop => "compatible",
+        prop => "riscv,isa",
+        prop => "mmu-type",
+    );
+}
+
+#[test]
+fn get_siblings_and_descendants() {
+    let dt = unsafe { DevTree::new(FDT) }.unwrap();
+    let cpu_map = dt
+        .node_at_path(IntoIterator::into_iter(["cpus", "cpu-map"]))
+        .unwrap()
+        .unwrap();
+    check_item_iter!(
+        &mut cpu_map.siblings_and_descendants(),
+        node => "cpu@0",
+        prop => "phandle",
+        prop => "device_type",
+        prop => "reg",
+        prop => "status",
+        prop => "compatible",
+        prop => "riscv,isa",
+        prop => "mmu-type",
+        node => "interrupt-controller",
+        prop => "#interrupt-cells",
+        prop => "interrupt-controller",
+        prop => "compatible",
+        prop => "phandle",
+    );
+}
+
+#[test]
+fn get_siblings() {
+    let dt = unsafe { DevTree::new(FDT) }.unwrap();
+    let cpu_map = dt
+        .node_at_path(IntoIterator::into_iter(["cpus", "cpu-map"]))
+        .unwrap()
+        .unwrap();
+    check_item_iter!(
+        &mut cpu_map.siblings(),
+        node => "cpu@0",
+        prop => "phandle",
+        prop => "device_type",
+        prop => "reg",
+        prop => "status",
+        prop => "compatible",
+        prop => "riscv,isa",
+        prop => "mmu-type",
+    );
 }
 
 pub mod index_tests {
