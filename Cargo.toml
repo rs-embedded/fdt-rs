@@ -42,6 +42,6 @@ rustc_version = "0.2"
 
 [features]
 default = ["std"]
-std = []
-alloc = []
+std = ["fallible-iterator/std"]
+alloc = ["fallible-iterator/alloc"]
 doctest = []
