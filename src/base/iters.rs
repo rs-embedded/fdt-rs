@@ -1,4 +1,5 @@
 //! Iterative parsers of a [`DevTree`].
+use core::marker::PhantomData;
 use core::mem::size_of;
 use core::num::NonZeroUsize;
 use core::str::from_utf8;
@@ -23,6 +24,15 @@ pub struct DevTreeReserveEntryIter<'a, 'dt: 'a> {
     fdt: &'a DevTree<'dt>,
 }
 
+#[repr(transparent)]
+pub struct DevTreeReserveEntryRef<'dt>(*const fdt_reserve_entry, PhantomData<DevTree<'dt>>);
+
+impl<'dt> DevTreeReserveEntryRef<'dt> {
+    unsafe fn read_unaligned(&self) -> fdt_reserve_entry {
+        self.0.read_unaligned()
+    }
+}
+
 impl<'a, 'dt: 'a> DevTreeReserveEntryIter<'a, 'dt> {
     pub(crate) fn new(fdt: &'a DevTree<'dt>) -> Self {
         Self {
@@ -31,33 +41,36 @@ impl<'a, 'dt: 'a> DevTreeReserveEntryIter<'a, 'dt> {
         }
     }
 
-    /// Return the current offset as a fdt_reserve_entry reference.
-    ///
-    /// # Safety
-    ///
-    /// The caller must verify that the current offset of this iterator is 32-bit aligned.
-    /// (Each field is 32-bit aligned and they may be read individually.)
-    unsafe fn read(&'a self) -> Result<&'dt fdt_reserve_entry> {
-        Ok(&*self.fdt.ptr_at(self.offset)?)
+    /// Return the current offset as a fdt_reserve_entry pointer.
+    unsafe fn ptr(&'a self) -> Result<DevTreeReserveEntryRef<'dt>> {
+        Ok(DevTreeReserveEntryRef(
+            self.fdt.ptr_at(self.offset)?,
+            PhantomData,
+        ))
     }
 }
 
 impl<'a, 'dt: 'a> Iterator for DevTreeReserveEntryIter<'a, 'dt> {
-    type Item = &'dt fdt_reserve_entry;
+    type Item = DevTreeReserveEntryRef<'dt>;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.offset > self.fdt.totalsize() {
+        let next_offset = size_of::<fdt_reserve_entry>() + self.offset;
+        if next_offset > self.fdt.totalsize() {
             None
         } else {
-            // We guaruntee the read will be aligned to 32 bits because:
-            // - We construct with guarunteed 32-bit aligned offset
-            // - We always increment by an aligned amount
-            let ret = unsafe { self.read().unwrap() };
-
-            if ret.address == 0.into() && ret.size == 0.into() {
-                return None;
+            // - We previously guarunteed enough memory with next_offset check.
+            // - All reads will be called through unaligned_read and are therefore
+            //   safe.
+            // - We will assume that given the iterator should be constructed
+            //   over a valid FDT that interpretting data is valid.
+            unsafe {
+                let res = self.ptr().unwrap();
+                let data: fdt_reserve_entry = res.read_unaligned();
+                if data.address == 0.into() && data.size == 0.into() {
+                    return None;
+                }
+                self.offset = next_offset;
+                Some(res)
             }
-            self.offset += size_of::<fdt_reserve_entry>();
-            Some(ret)
         }
     }
 }
